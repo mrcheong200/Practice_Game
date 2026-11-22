@@ -809,55 +809,51 @@ button {
   transition: border-color 0.18s, background 0.18s, transform 0.18s;
 }
 
-.battle-team-member .battle-sprite-svg {
-  width: 35px;
-  height: 35px;
-  filter: saturate(0.75);
-}
-
-.battle-team-member.visited {
-  background: #f1f5f9;
-  opacity: 0.62;
-}
-
 .battle-team-member.current {
   border-color: #d99b16;
   background: #fff4b8;
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px #f2c14e;
   transform: translateY(-2px);
-  opacity: 1;
   z-index: 1;
 }
 
-.battle-team-member.current .battle-sprite-svg {
-  filter: none;
+.battle-team-member.correct {
+  border-color: #169b59;
+  background: #dcfce7;
+  color: #08783f;
 }
 
-.battle-team-member.answered::after {
-  content: '✓';
+.battle-team-member.wrong {
+  border-color: #dc4040;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.battle-result-icon {
   position: absolute;
   right: -4px;
   bottom: -4px;
   display: grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   border: 2px solid #f8fafc;
   border-radius: 4px;
-  background: #22a96b;
+  background: #16a365;
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
+  line-height: 1;
+}
+
+.battle-team-member.wrong .battle-result-icon {
+  background: #dc4040;
 }
 
 .battle-team-number {
-  position: absolute;
-  top: 0;
-  left: 3px;
-  z-index: 1;
-  color: #475569;
+  color: inherit;
   font-family: "Courier New", monospace;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 900;
 }
 
@@ -986,11 +982,16 @@ button {
 }
 
 .battle-name-row strong {
+  min-width: 0;
+  overflow: hidden;
   font-size: 15px;
   letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .battle-name-row span {
+  flex: none;
   font-family: "Courier New", monospace;
   font-size: 12px;
   font-weight: 900;
@@ -1089,8 +1090,12 @@ button {
   shape-rendering: crispEdges;
 }
 
-.player-monster .battle-sprite-svg {
-  transform: scaleX(-1);
+.battle-monster .battle-player-avatar {
+  width: 118px;
+  height: 118px;
+  border: 4px solid #293447;
+  font-size: 62px;
+  box-shadow: 4px 4px 0 rgba(41, 52, 71, 0.2), inset 0 0 0 4px rgba(255, 255, 255, 0.6);
 }
 
 .battle-platform {
@@ -1115,29 +1120,25 @@ button {
 }
 
 .battle-command {
-  display: flex;
-  align-items: center;
-  gap: 11px;
   margin-top: 10px;
-  padding: 10px 12px;
+  padding: 18px;
   border: 3px solid #293447;
   border-radius: 9px;
   background: #fff;
   color: #293447;
-  font-size: 13.5px;
-  font-weight: 800;
 }
 
-.battle-command-icon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border: 2px solid #293447;
-  border-radius: 6px;
-  background: #ffe168;
-  font-size: 17px;
+.battle-question-content {
+  width: 100%;
+}
+
+.battle-question-panel .q-meta {
+  margin-bottom: 10px;
+}
+
+.battle-question-panel .q-title {
+  margin-bottom: 16px;
+  font-size: 20px;
 }
 
 /* ---------- Result ---------- */
@@ -1577,17 +1578,21 @@ button {
   }
 
   .battle-command {
-    gap: 8px;
-    padding: 8px;
+    margin-top: 8px;
+    padding: 12px;
     border-width: 2px;
-    font-size: 11.5px;
-    line-height: 1.45;
   }
 
-  .battle-command-icon {
-    width: 26px;
-    height: 26px;
-    font-size: 14px;
+  .battle-question-panel .q-title {
+    margin-bottom: 14px;
+    font-size: 17px;
+  }
+
+  .battle-monster .battle-player-avatar {
+    width: 80px;
+    height: 80px;
+    border-width: 3px;
+    font-size: 42px;
   }
 
   .q-title {

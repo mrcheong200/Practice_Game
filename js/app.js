@@ -426,6 +426,7 @@
             attemptId: data.attempt_id,
             questions: data.questions || [],
             answers: {},
+            answerResults: {},
             index: 0,
             startedAt: Date.now()
           };
@@ -463,6 +464,7 @@
 
   function battleSprite(species) {
     const sprites = {
+      oak: '<path fill="#2d2a32" d="M20 4h23v4h5v7h4v18h-5v6h5v21h-6v4H17v-4h-6V40h5v-7h-5V18h4V9h5z"/><path fill="#d7dde2" d="M20 8h23v4h5v8h-5v-5h-5v-4H22v4h-5v8h-4V14h3V9h4z"/><path fill="#f0bd91" d="M19 18h25v16h-5v5H23v-4h-4z"/><path fill="#f0bd91" d="M14 23h5v8h-5zm30 0h5v8h-5z"/><path fill="#2d2a32" d="M22 23h6v3h-6zm12 0h6v3h-6zm-9 8h12v3H25z"/><path fill="#fff" d="M15 38h33v22H15z"/><path fill="#dce5ea" d="M15 38h8v22h-8zm26 0h7v22h-7z"/><path fill="#c84c45" d="M26 39h11v17H26z"/><path fill="#2d2a32" d="M25 38h14v4H25zm-4 18h7v8h-9v-4h2zm15 0h7v4h2v4h-9z"/><path fill="#f0bd91" d="M9 40h6v13H9zm40 0h6v13h-6z"/><path fill="#fff" d="M20 40h5v13h-5zm19 0h5v13h-5z"/>',
       pikachu: '<path fill="#2d2a32" d="M19 5h6v7h5v5h5v7h5v9h-5v5H15v-5h-5V19h5v-7h4z"/><path fill="#f8d647" d="M18 9h5v7h5v4h5v8h5v5h-5v4H15v-4h-4V20h5v-5h2z"/><path fill="#f8d647" d="M16 33h20v5h5v20h-5v6H13v-6H8V43h5v-6h3z"/><path fill="#fff3a6" d="M15 38h17v14H15z"/><path fill="#2d2a32" d="M13 28h5v5h-5zm16 0h5v5h-5z"/><path fill="#ef5b5b" d="M7 34h7v7H7zm28 0h7v7h-7z"/><path fill="#2d2a32" d="M20 35h5v4h-5zm-3 5h11v3H17z"/><path fill="#b47732" d="M8 55h8v9H8zm21 0h8v9h-8z"/><path fill="#f8d647" d="M40 44h7v-8h5v-8h5v18h-5v9h-7v9h-8V54h3z"/>',
       bulbasaur: '<path fill="#2d2a32" d="M18 18h7v-7h15v7h7v7h5v29h-5v8H12v-8H7V34h5v-9h6z"/><path fill="#73cfa2" d="M14 29h33v27H12v-7H9V37h5z"/><path fill="#73cfa2" d="M18 19h6v10h-6zm21-1h7v12h-7z"/><path fill="#4a9e70" d="M24 12h16v7h5v12H19V19h5z"/><path fill="#77bd59" d="M27 7h11v6h5v12H21V13h6z"/><path fill="#2d2a32" d="M16 34h6v7h-6zm21 0h6v7h-6z"/><path fill="#ef7d81" d="M17 34h4v5h-4zm21 0h4v5h-4z"/><path fill="#2d2a32" d="M26 44h9v4h-9zm-13 12h10v8H13zm23 0h10v8H36z"/><path fill="#4a9e70" d="M13 44h6v5h-6zm27 3h6v5h-6z"/>',
       charmander: '<path fill="#2d2a32" d="M16 9h22v5h6v25h-5v7h5v13h-6v5H14v-5H9V45h5V20h2z"/><path fill="#f39a4a" d="M17 12h19v5h5v20h-6v6H15V22h2z"/><path fill="#f39a4a" d="M15 40h23v17h-5v5H15v-5h-3V46h3z"/><path fill="#ffe0a3" d="M18 43h15v16H18z"/><path fill="#2d2a32" d="M20 23h5v7h-5zm13 0h5v7h-5z"/><path fill="#fff" d="M21 23h3v3h-3zm13 0h3v3h-3z"/><path fill="#2d2a32" d="M24 34h10v3H24z"/><path fill="#f39a4a" d="M40 47h8v-8h5v-7h5v18h-5v8h-8v6h-7V54h2z"/><path fill="#ef5350" d="M50 29h5v-8h5v18h-5v5h-5z"/><path fill="#ffd34e" d="M53 22h5v-8h4v17h-5v5h-4z"/>',
@@ -478,35 +480,43 @@
     return svg;
   }
 
-  function createBattleScene(quiz) {
-    const opponents = [
-      { species: 'bulbasaur', name: '妙蛙種子', type: '草', level: 12 },
-      { species: 'charmander', name: '小火龍', type: '火', level: 13 },
-      { species: 'squirtle', name: '傑尼龜', type: '水', level: 12 },
-      { species: 'eevee', name: '伊布', type: '一般', level: 14 },
-      { species: 'gengar', name: '耿鬼', type: '幽靈', level: 15 }
-    ];
+  function createBattleScene(quiz, question, answerArea) {
+    const config = (window.CONFIG && window.CONFIG.BATTLE) || {};
+    const profile = state.profile || {};
+    const enemyName = config.ENEMY_NAME || '大木博士';
+    const enemySprite = config.ENEMY_SPRITE || 'oak';
+    const playerName = config.PLAYER_NAME || profile.name || profile.email || '同學';
+    const playerAvatarKey = config.PLAYER_AVATAR || profile.avatar_id || 'default';
+    const playerAvatar = avatarEl(playerAvatarKey, 'battle');
     const total = quiz.questions.length;
     const current = quiz.index;
-    const enemy = opponents[current % opponents.length];
-    const team = h('div', { class: 'battle-team-list', role: 'img', 'aria-label': '敵方隊伍共 ' + total + ' 隻，目前第 ' + (current + 1) + ' 隻' });
+    const results = quiz.answerResults || {};
+    const team = h('div', { class: 'battle-team-list', role: 'list', 'aria-label': '各題作答結果' });
 
-    quiz.questions.forEach(function (question, index) {
-      const opponent = opponents[index % opponents.length];
-      const answered = String(quiz.answers[question.qid] || '').trim() !== '';
+    playerAvatar.classList.add('battle-player-avatar');
+
+    quiz.questions.forEach(function (item, index) {
+      const result = results[item.qid];
+      const statusText = result === true ? '回答正確' : (result === false ? '回答錯誤' : '尚未批改');
       team.appendChild(h('div', {
         class: 'battle-team-member' +
           (index === current ? ' current' : '') +
-          (index < current ? ' visited' : '') +
-          (answered ? ' answered' : ''),
-        title: '第 ' + (index + 1) + ' 題：' + opponent.name + (index === current ? '（目前對手）' : '')
+          (result === true ? ' correct' : '') +
+          (result === false ? ' wrong' : ''),
+        role: 'listitem',
+        title: '第 ' + (index + 1) + ' 題：' + statusText + (index === current ? '（目前題目）' : ''),
+        'aria-label': '第 ' + (index + 1) + ' 題，' + statusText
       },
         h('span', { class: 'battle-team-number', text: String(index + 1) }),
-        battleSprite(opponent.species)
+        result === undefined ? null : h('span', {
+          class: 'battle-result-icon',
+          text: result ? '✓' : '×',
+          'aria-hidden': 'true'
+        })
       ));
     });
 
-    return h('section', { class: 'battle-card', 'aria-label': '寶可夢練習戰鬥畫面' },
+    return h('section', { class: 'battle-card', 'aria-label': '答題對戰畫面' },
       h('div', { class: 'battle-heading' },
         h('div', {},
           h('span', { class: 'battle-eyebrow', text: 'POKÉMON QUIZ BATTLE' }),
@@ -514,7 +524,7 @@
         ),
         h('div', { class: 'battle-remaining' },
           h('span', { class: 'battle-remaining-dot' }),
-          h('span', { text: '敵方隊伍 ' + (current + 1) + ' / ' + total + ' 隻' })
+          h('span', { text: '挑戰數量 ' + (current + 1) + ' / ' + total + ' 題' })
         )
       ),
       h('div', { class: 'battle-team' }, team),
@@ -527,27 +537,27 @@
         h('div', { class: 'battle-grass grass-two' }),
         h('div', { class: 'battle-status enemy-status' },
           h('div', { class: 'battle-name-row' },
-            h('strong', { text: enemy.name }),
-            h('span', { text: 'Lv. ' + enemy.level })
+            h('strong', { text: enemyName, title: enemyName }),
+            h('span', { text: '博士' })
           ),
           h('div', { class: 'battle-hp-row' },
             h('span', { class: 'battle-hp-label', text: 'HP' }),
             h('div', { class: 'battle-hp-track' }, h('div', { class: 'battle-hp-fill' }))
           ),
-          h('span', { class: 'battle-type', text: enemy.type + '屬性' })
+          h('span', { class: 'battle-type', text: '寶可夢研究者' })
         ),
-        h('div', { class: 'battle-enemy-unit', key: enemy.species + '-' + current },
-          h('div', { class: 'battle-monster enemy-monster' }, battleSprite(enemy.species)),
+        h('div', { class: 'battle-enemy-unit' },
+          h('div', { class: 'battle-monster enemy-monster' }, battleSprite(enemySprite)),
           h('div', { class: 'battle-platform enemy-platform' })
         ),
         h('div', { class: 'battle-player-unit' },
-          h('div', { class: 'battle-monster player-monster' }, battleSprite('pikachu')),
+          h('div', { class: 'battle-monster player-monster' }, playerAvatar),
           h('div', { class: 'battle-platform player-platform' })
         ),
         h('div', { class: 'battle-status player-status' },
           h('div', { class: 'battle-name-row' },
-            h('strong', { text: '皮卡丘' }),
-            h('span', { text: 'Lv. 18' })
+            h('strong', { text: playerName, title: playerName }),
+            h('span', { text: '挑戰者' })
           ),
           h('div', { class: 'battle-hp-row' },
             h('span', { class: 'battle-hp-label', text: 'HP' }),
@@ -556,11 +566,32 @@
           h('div', { class: 'battle-hp-numbers', text: '48 / 48' })
         )
       ),
-      h('div', { class: 'battle-command' },
-        h('span', { class: 'battle-command-icon', text: '⚡' }),
-        h('p', { text: '第 ' + (current + 1) + ' 題：' + enemy.name + ' 出現了！選出正確答案，發動知識攻擊！' })
+      h('div', { class: 'battle-command battle-question-panel' },
+        h('div', { class: 'battle-question-content' },
+          h('div', { class: 'q-meta' },
+            h('span', { class: 'tag', text: question.subject || '練習' }),
+            h('span', { class: 'tag type-tag', text: typeLabel(question.type) })
+          ),
+          h('h2', { class: 'q-title', text: question.question }),
+          answerArea
+        )
       )
     );
+  }
+
+  function setQuizAnswer(quiz, qid, answer) {
+    quiz.answers[qid] = answer;
+    if (!quiz.answerResults || quiz.answerResults[qid] === undefined) return;
+
+    delete quiz.answerResults[qid];
+    const marker = document.querySelectorAll('.battle-team-member')[quiz.index];
+    if (marker) {
+      marker.classList.remove('correct', 'wrong');
+      const icon = marker.querySelector('.battle-result-icon');
+      if (icon) icon.remove();
+      marker.title = '第 ' + (quiz.index + 1) + ' 題：尚未批改（目前題目）';
+      marker.setAttribute('aria-label', '第 ' + (quiz.index + 1) + ' 題，尚未批改');
+    }
   }
 
   function renderQuiz() {
@@ -588,7 +619,7 @@
             (currentAnswer === option.key ? ' selected' : ''),
           type: 'button',
           onclick: function () {
-            quiz.answers[question.qid] = option.key;
+            setQuizAnswer(quiz, question.qid, option.key);
             Array.prototype.forEach.call(answerArea.children, function (child) {
               child.classList.remove('selected');
             });
@@ -609,7 +640,7 @@
         autocomplete: 'off'
       });
       input.addEventListener('input', function () {
-        quiz.answers[question.qid] = input.value;
+        setQuizAnswer(quiz, question.qid, input.value);
       });
       answerArea.appendChild(input);
     }
@@ -618,9 +649,10 @@
 
     const prevButton = h('button', {
       class: 'btn ghost',
+      id: 'quiz-prev',
       disabled: quiz.index === 0,
       onclick: function () {
-        if (quiz.index > 0) {
+        if (quiz.index > 0 && !state.busy) {
           quiz.index--;
           renderQuiz();
         }
@@ -630,12 +662,10 @@
     const nextButton = quiz.index < total - 1
       ? h('button', {
         class: 'btn primary',
-        onclick: function () {
-          quiz.index++;
-          renderQuiz();
-        }
+        id: 'quiz-next',
+        onclick: goToNextQuestion
       }, '下一題')
-      : h('button', { class: 'btn primary', onclick: submitQuiz }, '送出答案');
+      : h('button', { class: 'btn primary', id: 'quiz-next', onclick: submitQuiz }, '送出答案');
 
     const content = h('div', { class: 'page quiz-page' },
       h('div', { class: 'quiz-top' },
@@ -643,20 +673,53 @@
         timerEl
       ),
       h('div', { class: 'progress' }, progressFill),
-      createBattleScene(quiz),
-      h('section', { class: 'card question-card' },
-        h('div', { class: 'q-meta' },
-          h('span', { class: 'tag', text: question.subject || '練習' }),
-          h('span', { class: 'tag type-tag', text: typeLabel(question.type) })
-        ),
-        h('h2', { class: 'q-title', text: question.question }),
-        answerArea
-      ),
+      createBattleScene(quiz, question, answerArea),
       h('div', { class: 'quiz-actions' }, prevButton, nextButton)
     );
 
     renderShell(content, 'practice');
     startTimer(timerEl, quiz.startedAt);
+  }
+
+  async function goToNextQuestion() {
+    const quiz = state.quiz;
+    if (!quiz || state.busy || quiz.index >= quiz.questions.length - 1) return;
+
+    const question = quiz.questions[quiz.index];
+    const rawAnswer = quiz.answers[question.qid];
+    const answer = String(rawAnswer === null || rawAnswer === undefined ? '' : rawAnswer);
+    quiz.answerResults = quiz.answerResults || {};
+
+    if (answer.trim() && quiz.answerResults[question.qid] === undefined) {
+      state.busy = true;
+      const nextButton = document.getElementById('quiz-next');
+      const prevButton = document.getElementById('quiz-prev');
+      const controls = document.querySelectorAll(
+        '.battle-question-panel button, .battle-question-panel input, #quiz-prev, #quiz-next'
+      );
+      Array.prototype.forEach.call(controls, function (control) { control.disabled = true; });
+      if (nextButton) nextButton.textContent = '批改中…';
+
+      try {
+        const data = await api('quiz/check', {
+          attempt_id: quiz.attemptId,
+          qid: question.qid,
+          answer: answer
+        });
+        quiz.answerResults[question.qid] = !!data.is_correct;
+      } catch (err) {
+        toast(err.message);
+        Array.prototype.forEach.call(controls, function (control) { control.disabled = false; });
+        if (prevButton) prevButton.disabled = quiz.index === 0;
+        if (nextButton) nextButton.textContent = '下一題';
+        state.busy = false;
+        return;
+      }
+      state.busy = false;
+    }
+
+    quiz.index++;
+    renderQuiz();
   }
 
   async function submitQuiz() {
