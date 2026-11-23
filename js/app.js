@@ -726,19 +726,14 @@
     quiz.answerResults = quiz.answerResults || {};
     quiz.answerResults[question.qid] = isCorrect;
     quiz.battleMessage = pickBattleLine(isCorrect ? BATTLE_PRAISE : BATTLE_ENCOURAGE);
-    renderQuiz();
+    state.busy = false;
 
-    const isLast = quiz.index >= quiz.questions.length - 1;
-    setTimeout(function () {
-      if (state.quiz !== quiz) return;
-      state.busy = false;
-      if (isLast) {
-        submitQuiz();
-      } else {
-        quiz.index += 1;
-        renderQuiz();
-      }
-    }, 1200);
+    if (quiz.index >= quiz.questions.length - 1) {
+      submitQuiz();
+    } else {
+      quiz.index += 1;
+      renderQuiz();
+    }
   }
 
   async function submitQuiz() {
