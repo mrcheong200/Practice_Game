@@ -614,6 +614,7 @@
     lastTime: 0,
     keys: {},
     dialogNpc: null,
+    moveQueue: [],
     player: {
       col: 5,
       row: 3,
@@ -644,9 +645,59 @@
     return true;
   }
 
+  /**
+   * BFS 尋路：fromCol/fromRow → toCol/toRow
+   * 回傳格子路徑陣列 [{col, row}, ...]（不含起點），找不到回傳 null
+   */
+  function findPath(fromCol, fromRow, toCol, toRow) {
+    if (fromCol === toCol && fromRow === toRow) return [];
+    // 目標本身不可走（例如 NPC 所在格），檢查其四周
+    if (!isWalkable(toCol, toRow)) {
+      // 找目標四相鄰可走格
+      const neighbors = [
+        [toCol + 1, toRow], [toCol - 1, toRow],
+        [toCol, toRow + 1], [toCol, toRow - 1]
+      ];
+      let bestPath = null;
+      for (let k = 0; k < neighbors.length; k++) {
+        const nc = neighbors[k][0], nr = neighbors[k][1];
+        if (!isWalkable(nc, nr)) continue;
+        const p = findPath(fromCol, fromRow, nc, nr);
+        if (p && (bestPath === null || p.length < bestPath.length)) bestPath = p;
+      }
+      return bestPath; // null 代表完全沒路
+    }
+
+    const visited = new Set();
+    visited.add(fromCol + ',' + fromRow);
+    const queue = [[fromCol, fromRow, []]];
+    const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+    while (queue.length > 0) {
+      const node = queue.shift();
+      const col = node[0], row = node[1], path = node[2];
+
+      for (let d = 0; d < dirs.length; d++) {
+        const nc = col + dirs[d][0];
+        const nr = row + dirs[d][1];
+        const key = nc + ',' + nr;
+        if (visited.has(key)) continue;
+        if (!isWalkable(nc, nr)) continue;
+
+        visited.add(key);
+        const newPath = path.concat([{ col: nc, row: nr }]);
+
+        if (nc === toCol && nr === toRow) return newPath;
+        queue.push([nc, nr, newPath]);
+      }
+    }
+    return null;
+  }
+
   function renderWorld() {
     world.keys = {};
     world.dialogNpc = null;
+    world.moveQueue = [];
 
     const canvas = h('canvas', {
       class: 'world-canvas',
@@ -660,7 +711,7 @@
       h('div', { class: 'page-head row' },
         h('div', {},
           h('h1', { text: '練習地圖' }),
-          h('p', { class: 'muted', text: '走到老師旁邊，按 A 或空白鍵對話。' })
+          h('p', { class: 'muted', text: '走到老師旁邊，按 K 或點擊互動。' })
         ),
         h('button', {
           class: 'btn ghost tiny',
@@ -668,7 +719,7 @@
         }, '直接練習')
       ),
       h('div', { class: 'world-stage' }, canvas, dialog),
-      h('p', { class: 'world-hint', text: '桌面：方向鍵／WASD 移動，空白鍵或 Enter 互動' }),
+      h('p', { class: 'world-hint', text: '點地圖移動／桌面方向鍵 WASD，K 確認／J 取消' }),
       h('div', { class: 'world-controls' }, buildWorldDpad(), h('button', {
         class: 'world-action',
         type: 'button',
@@ -706,6 +757,7 @@
       button.addEventListener('pointerdown', function (event) {
         event.preventDefault();
         world.keys[pair[0]] = true;
+        world.moveQueue = []; // 人工 dpad=介入自動移動
         if (button.setPointerCapture) {
           try { button.setPointerCapture(event.pointerId); } catch (err) { /* 忽略 */ }
         }
@@ -729,6 +781,7 @@
     world.active = false;
     world.dialogNpc = null;
     world.keys = {};
+    world.moveQueue = [];
 
     if (world.canvas) {
       world.canvas.removeEventListener('click', onWorldCanvasClick);
@@ -766,12 +819,22 @@
       return;
     }
 
+    // 優先消化 moveQueue（點擊自動移動）
+    if (world.moveQueue.length > 0) {
+      // 如果這時有玩家按住方向鍵，代表人工輸入介入，取消自動路徑
+      if (['up', 'down', 'left', 'right'].some(function (k) { return world.keys[k]; })) {
+        world.moveQueue = [];
+      } else {
+        const next = world.moveQueue.shift();
+        stepPlayerTo(next.col, next.row);
+        return;
+      }
+    }
+
     const dir = ['up', 'down', 'left', 'right'].filter(function (key) {
       return world.keys[key];
     })[0];
     if (!dir) return;
-
-    player.dir = dir;
 
     const delta = {
       up: [0, -1],
@@ -784,6 +847,18 @@
     const nextRow = player.row + delta[1];
     if (!isWalkable(nextCol, nextRow)) return;
 
+    stepPlayerTo(nextCol, nextRow, dir);
+  }
+
+  /** 將玩家移動一格到 nextCol/nextRow，設定動畫起點終點 */
+  function stepPlayerTo(nextCol, nextRow, dir) {
+    const player = world.player;
+    if (!dir) {
+      const dc = nextCol - player.col;
+      const dr = nextRow - player.row;
+      dir = dc > 0 ? 'right' : dc < 0 ? 'left' : dr > 0 ? 'down' : 'up';
+    }
+    player.dir = dir;
     player.col = nextCol;
     player.row = nextRow;
     player.fromX = player.x;
@@ -979,6 +1054,10 @@
         onclick: closeWorldDialog
       }, '否，先逛逛')
     ));
+    box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
+      h('kbd', { text: 'K' }), ' 確認 ',
+      h('kbd', { text: 'J' }), ' 取消'
+    ));
 
     box.hidden = false;
   }
@@ -1005,23 +1084,57 @@
   }
 
   function onWorldCanvasClick(event) {
-    if (!world.active || world.dialogNpc || !world.canvas) return;
+    if (!world.active || !world.canvas) return;
 
     const rect = world.canvas.getBoundingClientRect();
-    const col = Math.floor((event.clientX - rect.left) * (world.canvas.width / rect.width) / WORLD_TILE);
-    const row = Math.floor((event.clientY - rect.top) * (world.canvas.height / rect.height) / WORLD_TILE);
+    const x = (event.clientX - rect.left) * (world.canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (world.canvas.height / rect.height);
+    const col = Math.floor(x / WORLD_TILE);
+    const row = Math.floor(y / WORLD_TILE);
 
+    // 1) 先找 NPC 命中 → 自動走到旁邊（或旁邊就直接對話）
     for (let i = 0; i < WORLD_NPCS.length; i++) {
       const npc = WORLD_NPCS[i];
       if (npc.col !== col || npc.row !== row) continue;
 
+      if (world.dialogNpc) return; // 對話框顯示中先忽略
       if (isAdjacentToPlayer(npc)) {
         openWorldDialog(npc);
       } else {
-        toast('先走到' + npc.name + '旁邊。');
+        // 自動走到 NPC 旁邊最近一格
+        const path = findPath(world.player.col, world.player.row, npc.col, npc.row);
+        if (path && path.length > 0) {
+          world.moveQueue = path;
+        } else {
+          toast('無法走到' + npc.name + '旁邊。');
+        }
       }
       return;
     }
+
+    // 2) 對話框開啟時，點地圖=嘗試關閉（走 J 鍵效果）
+    if (world.dialogNpc) {
+      closeWorldDialog();
+      return;
+    }
+
+    // 3) 檢查點到的格是否可行走
+    const tile = tileAt(col, row);
+    if (tile === '#') { toast('那裡是邊界。'); return; }
+    if (tile === 'T') { toast('樹擋住了去路。'); return; }
+    if (tile === '~') { toast('水太深，過不去。'); return; }
+    // 沙地 '=' 和草地 '.' 可走
+
+    if (col === world.player.col && row === world.player.row) return; // 點自己
+
+    const path = findPath(world.player.col, world.player.row, col, row);
+    if (path === null) {
+      toast('那裡走不過去。');
+      return;
+    }
+    if (path.length === 0) return; // 已經在那
+
+    world.moveQueue = path;
   }
 
   document.addEventListener('keydown', function (event) {
@@ -1030,11 +1143,37 @@
     const dir = WORLD_KEY_MAP[event.key];
     if (dir) {
       world.keys[dir] = true;
+      world.moveQueue = []; // 人工方向鍵=介入自動移動
       event.preventDefault();
       return;
     }
 
-    if (event.key === ' ' || event.key === 'Enter' || event.key === 'z' || event.key === 'Z') {
+    // K / k — 確認（對話框開啟時=開始挑戰；否則=互動 NPC）
+    if (event.key === 'k' || event.key === 'K') {
+      if (world.dialogNpc) {
+        const npc = world.dialogNpc;
+        closeWorldDialog();
+        startWorldChallenge(npc);
+      } else {
+        if (!event.repeat) tryInteract();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // J / j — 取消（對話框開啟時=關閉對話框）
+    if (event.key === 'j' || event.key === 'J') {
+      if (world.dialogNpc) {
+        closeWorldDialog();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // 保留 A / Space / Enter / Z 作為互動備用鍵
+    if (event.key === 'a' || event.key === 'A' ||
+        event.key === ' ' || event.key === 'Enter' ||
+        event.key === 'z' || event.key === 'Z') {
       if (world.dialogNpc) return;
       if (!event.repeat) tryInteract();
       event.preventDefault();
