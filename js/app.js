@@ -198,6 +198,8 @@
   }
 
   function route() {
+    stopWorld();
+
     if (!state.profile) {
       renderLogin(loginMessage);
       return;
@@ -205,7 +207,9 @@
 
     const hash = location.hash || '#/home';
 
-    if (hash === '#/practice') {
+    if (hash === '#/world') {
+      renderWorld();
+    } else if (hash === '#/practice') {
       renderPracticeSetup();
     } else if (hash === '#/quiz') {
       if (!state.quiz) {
@@ -231,6 +235,7 @@
   }
 
   function logout() {
+    stopWorld();
     window.Auth.disableAutoSelect();
     window.API.clearToken();
     state.profile = null;
@@ -357,7 +362,7 @@
     const profile = state.profile;
     const navItems = [
       { key: 'home', label: '首頁', hash: '#/home' },
-      { key: 'practice', label: '練習', hash: '#/practice' },
+      { key: 'world', label: '練習', hash: '#/world' },
       { key: 'leaderboard', label: '排行', hash: '#/leaderboard' },
       { key: 'shop', label: '商店', hash: '#/shop' },
       { key: 'history', label: '紀錄', hash: '#/history' }
@@ -413,7 +418,7 @@
           h('div', { class: 'points-pill', text: '⭐ ' + profile.points_balance + ' 積分' })
         ),
         h('div', { class: 'hero-actions' },
-          h('button', { class: 'btn primary', onclick: function () { navigate('#/practice'); } }, '開始練習'),
+          h('button', { class: 'btn primary', onclick: function () { navigate('#/world'); } }, '開始練習'),
           h('button', { class: 'btn ghost', onclick: function () { navigate('#/shop'); } }, '兌換頭像')
         )
       ),
@@ -501,19 +506,7 @@
         startButton.disabled = true;
         startButton.textContent = '準備題目中…';
         try {
-          const data = await api('quiz/start', { subject: select.value, count: count });
-          state.result = null;
-          state.quiz = {
-            attemptId: data.attempt_id,
-            questions: data.questions || [],
-            answers: {},
-            answerResults: {},
-            battleMessage: BATTLE_INTRO,
-            index: 0,
-            combo: 0,
-            maxCombo: 0
-          };
-          navigate('#/quiz');
+          await beginQuiz(select.value, count);
         } catch (err) {
           toast(err.message);
           startButton.disabled = false;
@@ -540,8 +533,527 @@
       startButton
     );
 
-    renderShell(content, 'practice');
+    renderShell(content, 'world');
   }
+
+  /* ---------- Quiz start (shared) ---------- */
+
+  async function beginQuiz(subject, count) {
+    const data = await api('quiz/start', { subject: subject || '', count: count });
+    state.result = null;
+    state.quiz = {
+      attemptId: data.attempt_id,
+      questions: data.questions || [],
+      answers: {},
+      answerResults: {},
+      battleMessage: BATTLE_INTRO,
+      index: 0,
+      combo: 0,
+      maxCombo: 0
+    };
+    navigate('#/quiz');
+  }
+
+  /* ---------- World ---------- */
+
+  const WORLD_TILE = 20;
+  const WORLD_MAP = [
+    '####################',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..T...........T...#',
+    '#.......====.......#',
+    '#.......====.......#',
+    '#..................#',
+    '#....~~~~..........#',
+    '#....~~~~..........#',
+    '#..................#',
+    '####################'
+  ];
+  const WORLD_COLS = WORLD_MAP[0].length;
+  const WORLD_ROWS = WORLD_MAP.length;
+
+  const WORLD_KEY_MAP = {
+    ArrowUp: 'up', w: 'up', W: 'up',
+    ArrowDown: 'down', s: 'down', S: 'down',
+    ArrowLeft: 'left', a: 'left', A: 'left',
+    ArrowRight: 'right', d: 'right', D: 'right'
+  };
+
+  const WORLD_NPCS = [
+    {
+      id: 'math',
+      name: '數學老師',
+      subject: '數學',
+      col: 5,
+      row: 2,
+      color: '#f59e0b',
+      letter: '數',
+      line: '想挑戰數學題嗎？答對可以拿積分喔！'
+    },
+    {
+      id: 'english',
+      name: '英文老師',
+      subject: '英文',
+      col: 14,
+      row: 2,
+      color: '#8b5cf6',
+      letter: '英',
+      line: '來練幾題英文吧，準備好了嗎？'
+    }
+  ];
+
+  const WORLD_CHALLENGE_COUNT = 5;
+
+  const world = {
+    active: false,
+    raf: 0,
+    ctx: null,
+    canvas: null,
+    lastTime: 0,
+    keys: {},
+    dialogNpc: null,
+    player: {
+      col: 5,
+      row: 3,
+      x: 5 * WORLD_TILE + WORLD_TILE / 2,
+      y: 3 * WORLD_TILE + WORLD_TILE / 2,
+      dir: 'up',
+      fromX: 0,
+      fromY: 0,
+      toX: 0,
+      toY: 0,
+      moving: false,
+      elapsed: 0
+    }
+  };
+
+  function tileAt(col, row) {
+    if (row < 0 || row >= WORLD_ROWS || col < 0 || col >= WORLD_COLS) return '#';
+    return WORLD_MAP[row].charAt(col);
+  }
+
+  function isWalkable(col, row) {
+    const tile = tileAt(col, row);
+    if (tile === '#' || tile === 'T' || tile === '~') return false;
+
+    for (let i = 0; i < WORLD_NPCS.length; i++) {
+      if (WORLD_NPCS[i].col === col && WORLD_NPCS[i].row === row) return false;
+    }
+    return true;
+  }
+
+  function renderWorld() {
+    world.keys = {};
+    world.dialogNpc = null;
+
+    const canvas = h('canvas', {
+      class: 'world-canvas',
+      width: WORLD_COLS * WORLD_TILE,
+      height: WORLD_ROWS * WORLD_TILE
+    });
+
+    const dialog = h('div', { class: 'world-dialog', id: 'world-dialog', hidden: true });
+
+    const content = h('div', { class: 'page world-page' },
+      h('div', { class: 'page-head row' },
+        h('div', {},
+          h('h1', { text: '練習地圖' }),
+          h('p', { class: 'muted', text: '走到老師旁邊，按 A 或空白鍵對話。' })
+        ),
+        h('button', {
+          class: 'btn ghost tiny',
+          onclick: function () { navigate('#/practice'); }
+        }, '直接練習')
+      ),
+      h('div', { class: 'world-stage' }, canvas, dialog),
+      h('p', { class: 'world-hint', text: '桌面：方向鍵／WASD 移動，空白鍵或 Enter 互動' }),
+      h('div', { class: 'world-controls' }, buildWorldDpad(), h('button', {
+        class: 'world-action',
+        type: 'button',
+        onclick: function () { tryInteract(); }
+      }, 'A'))
+    );
+
+    renderShell(content, 'world');
+
+    world.canvas = canvas;
+    world.ctx = canvas.getContext('2d');
+    world.active = true;
+    world.lastTime = 0;
+
+    const player = world.player;
+    player.moving = false;
+    player.elapsed = 0;
+    player.x = player.col * WORLD_TILE + WORLD_TILE / 2;
+    player.y = player.row * WORLD_TILE + WORLD_TILE / 2;
+
+    canvas.addEventListener('click', onWorldCanvasClick);
+    world.raf = requestAnimationFrame(worldFrame);
+  }
+
+  function buildWorldDpad() {
+    const dpad = h('div', { class: 'world-dpad' });
+
+    [['up', '▲'], ['left', '◀'], ['down', '▼'], ['right', '▶']].forEach(function (pair) {
+      const button = h('button', {
+        class: 'dpad-btn dpad-' + pair[0],
+        type: 'button',
+        'aria-label': pair[0]
+      }, pair[1]);
+
+      button.addEventListener('pointerdown', function (event) {
+        event.preventDefault();
+        world.keys[pair[0]] = true;
+        if (button.setPointerCapture) {
+          try { button.setPointerCapture(event.pointerId); } catch (err) { /* 忽略 */ }
+        }
+      });
+
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) {
+        button.addEventListener(name, function () {
+          world.keys[pair[0]] = false;
+        });
+      });
+
+      dpad.appendChild(button);
+    });
+
+    return dpad;
+  }
+
+  function stopWorld() {
+    if (world.raf) cancelAnimationFrame(world.raf);
+    world.raf = 0;
+    world.active = false;
+    world.dialogNpc = null;
+    world.keys = {};
+
+    if (world.canvas) {
+      world.canvas.removeEventListener('click', onWorldCanvasClick);
+      world.canvas = null;
+    }
+    world.ctx = null;
+  }
+
+  function worldFrame(ts) {
+    if (!world.active) return;
+
+    const dt = world.lastTime ? Math.min(60, ts - world.lastTime) : 16;
+    world.lastTime = ts;
+    updateWorld(dt);
+    drawWorld();
+    world.raf = requestAnimationFrame(worldFrame);
+  }
+
+  function updateWorld(dt) {
+    const player = world.player;
+    if (world.dialogNpc) return;
+
+    if (player.moving) {
+      player.elapsed += dt;
+      const ratio = Math.min(1, player.elapsed / 130);
+      player.x = player.fromX + (player.toX - player.fromX) * ratio;
+      player.y = player.fromY + (player.toY - player.fromY) * ratio;
+
+      if (ratio >= 1) {
+        player.moving = false;
+        player.elapsed = 0;
+        player.x = player.toX;
+        player.y = player.toY;
+      }
+      return;
+    }
+
+    const dir = ['up', 'down', 'left', 'right'].filter(function (key) {
+      return world.keys[key];
+    })[0];
+    if (!dir) return;
+
+    player.dir = dir;
+
+    const delta = {
+      up: [0, -1],
+      down: [0, 1],
+      left: [-1, 0],
+      right: [1, 0]
+    }[dir];
+
+    const nextCol = player.col + delta[0];
+    const nextRow = player.row + delta[1];
+    if (!isWalkable(nextCol, nextRow)) return;
+
+    player.col = nextCol;
+    player.row = nextRow;
+    player.fromX = player.x;
+    player.fromY = player.y;
+    player.toX = nextCol * WORLD_TILE + WORLD_TILE / 2;
+    player.toY = nextRow * WORLD_TILE + WORLD_TILE / 2;
+    player.moving = true;
+    player.elapsed = 0;
+  }
+
+  function drawWorld() {
+    const ctx = world.ctx;
+    if (!ctx) return;
+
+    for (let row = 0; row < WORLD_ROWS; row++) {
+      for (let col = 0; col < WORLD_COLS; col++) {
+        drawWorldTile(ctx, col, row, tileAt(col, row));
+      }
+    }
+
+    WORLD_NPCS.forEach(function (npc) {
+      drawWorldNpc(ctx, npc);
+    });
+
+    drawWorldPlayer(ctx);
+  }
+
+  function drawWorldTile(ctx, col, row, tile) {
+    const x = col * WORLD_TILE;
+    const y = row * WORLD_TILE;
+
+    if (tile === '~') {
+      ctx.fillStyle = '#4f9fe0';
+      ctx.fillRect(x, y, WORLD_TILE, WORLD_TILE);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.fillRect(x + 3, y + 6, 8, 2);
+      ctx.fillRect(x + 11, y + 13, 6, 2);
+      return;
+    }
+
+    if (tile === '=') {
+      ctx.fillStyle = '#e3cf9a';
+      ctx.fillRect(x, y, WORLD_TILE, WORLD_TILE);
+      ctx.fillStyle = 'rgba(180, 140, 80, 0.18)';
+      ctx.fillRect(x + 4, y + 5, 3, 3);
+      ctx.fillRect(x + 13, y + 14, 3, 3);
+      return;
+    }
+
+    ctx.fillStyle = ((col + row) % 2 === 0) ? '#7ec850' : '#77bf4a';
+    ctx.fillRect(x, y, WORLD_TILE, WORLD_TILE);
+
+    if (tile === '#' || tile === 'T') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+      ctx.beginPath();
+      ctx.ellipse(x + WORLD_TILE / 2, y + WORLD_TILE - 4, 7, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#2f7d32';
+      ctx.beginPath();
+      ctx.arc(x + WORLD_TILE / 2, y + 10, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#4c9a4c';
+      ctx.beginPath();
+      ctx.arc(x + WORLD_TILE / 2 - 2, y + 8, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawWorldNpc(ctx, npc) {
+    const x = npc.col * WORLD_TILE + WORLD_TILE / 2;
+    const y = npc.row * WORLD_TILE + WORLD_TILE / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 7, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = npc.color;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px "Microsoft JhengHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(npc.letter, x, y + 1);
+
+    if (isAdjacentToPlayer(npc)) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x, y - 14, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#1f2937';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.fillText('!', x, y - 13);
+    }
+  }
+
+  function drawWorldPlayer(ctx) {
+    const player = world.player;
+    const x = player.x;
+    const y = player.y;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 7, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#2563eb';
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(x - 2.5, y - 1, 1.6, 0, Math.PI * 2);
+    ctx.arc(x + 2.5, y - 1, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    const dir = {
+      up: [0, -1],
+      down: [0, 1],
+      left: [-1, 0],
+      right: [1, 0]
+    }[player.dir] || [0, -1];
+
+    ctx.fillStyle = '#fde68a';
+    ctx.beginPath();
+    ctx.moveTo(x + dir[0] * 11, y + dir[1] * 11);
+    ctx.lineTo(x + dir[0] * 7 - dir[1] * 3, y + dir[1] * 7 + dir[0] * 3);
+    ctx.lineTo(x + dir[0] * 7 + dir[1] * 3, y + dir[1] * 7 - dir[0] * 3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function isAdjacentToPlayer(npc) {
+    return Math.abs(npc.col - world.player.col) +
+      Math.abs(npc.row - world.player.row) === 1;
+  }
+
+  function adjacentNpc() {
+    for (let i = 0; i < WORLD_NPCS.length; i++) {
+      if (isAdjacentToPlayer(WORLD_NPCS[i])) return WORLD_NPCS[i];
+    }
+    return null;
+  }
+
+  function tryInteract() {
+    if (!world.active || world.dialogNpc) return;
+
+    const npc = adjacentNpc();
+    if (npc) {
+      openWorldDialog(npc);
+    } else {
+      toast('再走近一點，才能和老師對話。');
+    }
+  }
+
+  function openWorldDialog(npc) {
+    const box = document.getElementById('world-dialog');
+    if (!box) return;
+
+    world.dialogNpc = npc;
+    world.keys = {};
+    clearNode(box);
+
+    box.appendChild(h('span', { class: 'world-dialog-name', text: npc.name }));
+    box.appendChild(h('p', { class: 'world-dialog-text', text: npc.line }));
+    box.appendChild(h('div', { class: 'world-dialog-actions' },
+      h('button', {
+        class: 'btn primary tiny',
+        type: 'button',
+        onclick: function () {
+          closeWorldDialog();
+          startWorldChallenge(npc);
+        }
+      }, '是，開始挑戰'),
+      h('button', {
+        class: 'btn ghost tiny',
+        type: 'button',
+        onclick: closeWorldDialog
+      }, '否，先逛逛')
+    ));
+
+    box.hidden = false;
+  }
+
+  function closeWorldDialog() {
+    world.dialogNpc = null;
+    const box = document.getElementById('world-dialog');
+    if (!box) return;
+    box.hidden = true;
+    clearNode(box);
+  }
+
+  async function startWorldChallenge(npc) {
+    if (state.busy) return;
+    state.busy = true;
+
+    try {
+      await beginQuiz(npc.subject, WORLD_CHALLENGE_COUNT);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  function onWorldCanvasClick(event) {
+    if (!world.active || world.dialogNpc || !world.canvas) return;
+
+    const rect = world.canvas.getBoundingClientRect();
+    const col = Math.floor((event.clientX - rect.left) * (world.canvas.width / rect.width) / WORLD_TILE);
+    const row = Math.floor((event.clientY - rect.top) * (world.canvas.height / rect.height) / WORLD_TILE);
+
+    for (let i = 0; i < WORLD_NPCS.length; i++) {
+      const npc = WORLD_NPCS[i];
+      if (npc.col !== col || npc.row !== row) continue;
+
+      if (isAdjacentToPlayer(npc)) {
+        openWorldDialog(npc);
+      } else {
+        toast('先走到' + npc.name + '旁邊。');
+      }
+      return;
+    }
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (!world.active) return;
+
+    const dir = WORLD_KEY_MAP[event.key];
+    if (dir) {
+      world.keys[dir] = true;
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === ' ' || event.key === 'Enter' || event.key === 'z' || event.key === 'Z') {
+      if (world.dialogNpc) return;
+      if (!event.repeat) tryInteract();
+      event.preventDefault();
+    }
+  });
+
+  document.addEventListener('keyup', function (event) {
+    if (!world.active) return;
+
+    const dir = WORLD_KEY_MAP[event.key];
+    if (dir) {
+      world.keys[dir] = false;
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener('blur', function () {
+    world.keys = {};
+  });
 
   /* ---------- Quiz ---------- */
 
@@ -778,7 +1290,7 @@
       createBattleScene(quiz, question, answerArea)
     );
 
-    renderShell(content, 'practice');
+    renderShell(content, 'world');
   }
 
   async function confirmAnswer() {
@@ -968,6 +1480,7 @@
           : null,
         h('div', { class: 'actions' },
           h('button', { class: 'btn primary', onclick: function () { navigate('#/practice'); } }, '再練一次'),
+          h('button', { class: 'btn ghost', onclick: function () { navigate('#/world'); } }, '回到地圖'),
           h('button', { class: 'btn ghost', onclick: function () { navigate('#/home'); } }, '回首頁')
         )
       ),
@@ -979,7 +1492,7 @@
       )
     );
 
-    renderShell(content, 'practice');
+    renderShell(content, 'world');
   }
 
   function statBox(label, value) {
