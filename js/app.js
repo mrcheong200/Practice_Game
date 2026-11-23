@@ -257,6 +257,36 @@
     const buttonWrap = h('div', { class: 'google-btn' });
     const messageEl = h('p', { class: 'login-msg', id: 'login-msg', text: message || '' });
 
+    const testBlock = (window.CONFIG && window.CONFIG.TEST_LOGIN)
+      ? h('div', { class: 'login-test' },
+        h('div', { class: 'login-divider' }, h('span', { text: '或使用測試帳號' })),
+        h('form', {
+          class: 'login-form',
+          onsubmit: function (event) {
+            event.preventDefault();
+            submitAccountLogin(event.currentTarget, messageEl);
+          }
+        },
+          h('input', {
+            class: 'text-input',
+            name: 'email',
+            type: 'text',
+            placeholder: '測試帳號（Email）',
+            autocomplete: 'username'
+          }),
+          h('input', {
+            class: 'text-input',
+            name: 'password',
+            type: 'password',
+            placeholder: '密碼',
+            autocomplete: 'current-password'
+          }),
+          h('button', { class: 'btn primary', type: 'submit' }, '帳號登入')
+        ),
+        h('p', { class: 'login-test-note', text: '測試用帳號由老師在 Google Sheet 的 Accounts 工作表建立。' })
+      )
+      : null;
+
     const card = h('div', { class: 'login-card' },
       h('div', { class: 'login-brand' },
         h('span', { class: 'login-logo', text: '📚' }),
@@ -264,6 +294,7 @@
       ),
       h('p', { class: 'login-sub', text: '用 Google 帳號登入，開始練習並賺取積分兌換頭像。' }),
       buttonWrap,
+      testBlock,
       messageEl,
       h('p', { class: 'login-note', text: '僅限老師已開通的帳號。若無法登入，請聯絡老師。' })
     );
@@ -273,6 +304,34 @@
     window.Auth.mountLoginButton(buttonWrap, onGoogleCredential, function (text) {
       messageEl.textContent = text;
     });
+  }
+
+  async function submitAccountLogin(form, messageEl) {
+    const emailInput = form.querySelector('input[name="email"]');
+    const passwordInput = form.querySelector('input[name="password"]');
+    const submitButton = form.querySelector('button[type="submit"]');
+    const email = emailInput ? emailInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value : '';
+
+    if (!email || !password) {
+      messageEl.textContent = '請輸入帳號與密碼。';
+      return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+    messageEl.textContent = '登入中，請稍候…';
+
+    try {
+      const data = await window.API.call('login/account', { email: email, password: password });
+      window.API.setToken(data.token);
+      loginMessage = '';
+      await loadMe();
+      messageEl.textContent = '';
+      navigate('#/home');
+    } catch (err) {
+      messageEl.textContent = err.message;
+      if (submitButton) submitButton.disabled = false;
+    }
   }
 
   async function onGoogleCredential(response) {

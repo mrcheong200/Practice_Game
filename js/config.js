@@ -14,6 +14,9 @@ window.CONFIG = {
   API_MODE: 'post',
   SITE_NAME: '學生練習系統',
 
+  /* 測試用帳號登入表單；正式使用時改為 false 即可隱藏。 */
+  TEST_LOGIN: true,
+
   /* 對戰角色：PLAYER_ 留空時使用登入學生的名字與已裝備頭像。 */
   BATTLE: {
     ENEMY_NAME: '大木博士',
