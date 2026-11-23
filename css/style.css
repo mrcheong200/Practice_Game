@@ -598,37 +598,6 @@ button {
   margin: 0 auto;
 }
 
-.quiz-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 13.5px;
-  font-weight: 700;
-}
-
-.timer {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-.progress {
-  height: 9px;
-  border-radius: 999px;
-  background: #e5e7eb;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), #818cf8);
-  transition: width 0.3s ease;
-}
-
 .question-card {
   padding: 28px;
 }
@@ -697,6 +666,21 @@ button {
   font-size: 17px;
 }
 
+.option-btn:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.option-btn.selected:disabled {
+  opacity: 1;
+}
+
+.text-input:disabled {
+  background: #f9fafb;
+  color: var(--muted);
+  cursor: default;
+}
+
 .option-key {
   display: inline-flex;
   align-items: center;
@@ -713,12 +697,6 @@ button {
 .option-btn.selected .option-key {
   background: var(--primary);
   color: #fff;
-}
-
-.quiz-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 /* ---------- Pokémon battle ---------- */
@@ -1126,6 +1104,42 @@ button {
   border-radius: 9px;
   background: #fff;
   color: #293447;
+}
+
+.battle-dialog {
+  margin-top: 10px;
+  padding: 13px 16px;
+  border: 3px solid #293447;
+  border-radius: 9px;
+  background: #fffdf2;
+  box-shadow: 4px 4px 0 rgba(41, 52, 71, 0.18);
+  color: #293447;
+}
+
+.battle-dialog-name {
+  display: block;
+  margin-bottom: 3px;
+  color: #b45309;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+}
+
+.battle-dialog-text {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.battle-confirm-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.battle-confirm-row .btn {
+  min-width: 160px;
 }
 
 .battle-question-content {
@@ -1581,6 +1595,24 @@ button {
     margin-top: 8px;
     padding: 12px;
     border-width: 2px;
+  }
+
+  .battle-dialog {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-width: 2px;
+  }
+
+  .battle-dialog-text {
+    font-size: 13px;
+  }
+
+  .battle-confirm-row {
+    margin-top: 10px;
+  }
+
+  .battle-confirm-row .btn {
+    width: 100%;
   }
 
   .battle-question-panel .q-title {

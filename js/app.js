@@ -10,7 +10,6 @@
     result: null,
     history: [],
     historyTotal: 0,
-    timer: null,
     busy: false
   };
 
@@ -235,7 +234,6 @@
     state.result = null;
     state.recent = [];
     state.subjects = [];
-    clearTimer();
 
     try {
       history.replaceState(null, '', location.pathname + location.search);
@@ -249,8 +247,6 @@
   /* ---------- Login ---------- */
 
   function renderLogin(message) {
-    clearTimer();
-
     const app = document.getElementById('app');
     clearNode(app);
 
@@ -295,8 +291,6 @@
   /* ---------- Shell ---------- */
 
   function renderShell(content, active) {
-    clearTimer();
-
     const profile = state.profile;
     const navItems = [
       { key: 'home', label: '首頁', hash: '#/home' },
@@ -427,8 +421,8 @@
             questions: data.questions || [],
             answers: {},
             answerResults: {},
-            index: 0,
-            startedAt: Date.now()
+            battleMessage: BATTLE_INTRO,
+            index: 0
           };
           navigate('#/quiz');
         } catch (err) {
@@ -462,6 +456,24 @@
 
   /* ---------- Quiz ---------- */
 
+  const BATTLE_INTRO = '你能答對我出的所有題目嗎？';
+  const BATTLE_PRAISE = [
+    '想不到你如此聰明！',
+    '答得太漂亮了！',
+    '你真是個答題高手！',
+    '了不起，繼續保持！'
+  ];
+  const BATTLE_ENCOURAGE = [
+    '失敗乃兵家常事，再來！',
+    '別灰心，下一題扳回一城！',
+    '再接再厲，你可以的！',
+    '差一點點，繼續努力！'
+  ];
+
+  function pickBattleLine(lines) {
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+
   function battleSprite(species) {
     const sprites = {
       oak: '<path fill="#2d2a32" d="M20 4h23v4h5v7h4v18h-5v6h5v21h-6v4H17v-4h-6V40h5v-7h-5V18h4V9h5z"/><path fill="#d7dde2" d="M20 8h23v4h5v8h-5v-5h-5v-4H22v4h-5v8h-4V14h3V9h4z"/><path fill="#f0bd91" d="M19 18h25v16h-5v5H23v-4h-4z"/><path fill="#f0bd91" d="M14 23h5v8h-5zm30 0h5v8h-5z"/><path fill="#2d2a32" d="M22 23h6v3h-6zm12 0h6v3h-6zm-9 8h12v3H25z"/><path fill="#fff" d="M15 38h33v22H15z"/><path fill="#dce5ea" d="M15 38h8v22h-8zm26 0h7v22h-7z"/><path fill="#c84c45" d="M26 39h11v17H26z"/><path fill="#2d2a32" d="M25 38h14v4H25zm-4 18h7v8h-9v-4h2zm15 0h7v4h2v4h-9z"/><path fill="#f0bd91" d="M9 40h6v13H9zm40 0h6v13h-6z"/><path fill="#fff" d="M20 40h5v13h-5zm19 0h5v13h-5z"/>',
@@ -491,7 +503,21 @@
     const total = quiz.questions.length;
     const current = quiz.index;
     const results = quiz.answerResults || {};
+    const correctCount = quiz.questions.filter(function (item) {
+      return results[item.qid] === true;
+    }).length;
+    const enemyHp = Math.max(0, total - correctCount);
+    const enemyHpPercent = total ? Math.round((enemyHp / total) * 100) : 0;
+    const graded = results[question.qid] !== undefined;
+    const dialogText = quiz.battleMessage || BATTLE_INTRO;
     const team = h('div', { class: 'battle-team-list', role: 'list', 'aria-label': '各題作答結果' });
+
+    const confirmButton = h('button', {
+      class: 'btn primary',
+      id: 'battle-confirm',
+      disabled: graded,
+      onclick: confirmAnswer
+    }, '確認答案');
 
     playerAvatar.classList.add('battle-player-avatar');
 
@@ -519,7 +545,7 @@
     return h('section', { class: 'battle-card', 'aria-label': '答題對戰畫面' },
       h('div', { class: 'battle-heading' },
         h('div', {},
-          h('span', { class: 'battle-eyebrow', text: 'POKÉMON QUIZ BATTLE' }),
+          h('span', { class: 'battle-eyebrow', text: 'QUIZ BATTLE' }),
           h('h2', { text: '知識對決' })
         ),
         h('div', { class: 'battle-remaining' },
@@ -542,8 +568,14 @@
           ),
           h('div', { class: 'battle-hp-row' },
             h('span', { class: 'battle-hp-label', text: 'HP' }),
-            h('div', { class: 'battle-hp-track' }, h('div', { class: 'battle-hp-fill' }))
+            h('div', { class: 'battle-hp-track' },
+              h('div', {
+                class: 'battle-hp-fill',
+                style: 'width: ' + enemyHpPercent + '%'
+              })
+            )
           ),
+          h('div', { class: 'battle-hp-numbers', text: enemyHp + ' / ' + total }),
           h('span', { class: 'battle-type', text: '寶可夢研究者' })
         ),
         h('div', { class: 'battle-enemy-unit' },
@@ -566,6 +598,10 @@
           h('div', { class: 'battle-hp-numbers', text: '48 / 48' })
         )
       ),
+      h('div', { class: 'battle-dialog', role: 'status', 'aria-live': 'polite' },
+        h('span', { class: 'battle-dialog-name', text: enemyName }),
+        h('p', { class: 'battle-dialog-text', text: dialogText })
+      ),
       h('div', { class: 'battle-command battle-question-panel' },
         h('div', { class: 'battle-question-content' },
           h('div', { class: 'q-meta' },
@@ -575,7 +611,8 @@
           h('h2', { class: 'q-title', text: question.question }),
           answerArea
         )
-      )
+      ),
+      h('div', { class: 'battle-confirm-row' }, confirmButton)
     );
   }
 
@@ -595,20 +632,15 @@
   }
 
   function renderQuiz() {
-    clearTimer();
-
     const quiz = state.quiz;
     if (!quiz) {
       navigate('#/practice');
       return;
     }
 
-    const total = quiz.questions.length;
     const question = quiz.questions[quiz.index];
     const currentAnswer = quiz.answers[question.qid] || '';
-
-    const progressFill = h('div', { class: 'progress-fill' });
-    progressFill.style.width = Math.round(((quiz.index + 1) / total) * 100) + '%';
+    const graded = quiz.answerResults && quiz.answerResults[question.qid] !== undefined;
 
     const answerArea = h('div', { class: 'answer-area' });
 
@@ -618,6 +650,7 @@
           class: 'option-btn' + (question.type === 'truefalse' ? ' truefalse' : '') +
             (currentAnswer === option.key ? ' selected' : ''),
           type: 'button',
+          disabled: graded,
           onclick: function () {
             setQuizAnswer(quiz, question.qid, option.key);
             Array.prototype.forEach.call(answerArea.children, function (child) {
@@ -637,7 +670,8 @@
         type: 'text',
         placeholder: '輸入答案',
         value: currentAnswer,
-        autocomplete: 'off'
+        autocomplete: 'off',
+        disabled: graded
       });
       input.addEventListener('input', function () {
         setQuizAnswer(quiz, question.qid, input.value);
@@ -645,81 +679,66 @@
       answerArea.appendChild(input);
     }
 
-    const timerEl = h('span', { class: 'timer', text: '00:00' });
-
-    const prevButton = h('button', {
-      class: 'btn ghost',
-      id: 'quiz-prev',
-      disabled: quiz.index === 0,
-      onclick: function () {
-        if (quiz.index > 0 && !state.busy) {
-          quiz.index--;
-          renderQuiz();
-        }
-      }
-    }, '上一題');
-
-    const nextButton = quiz.index < total - 1
-      ? h('button', {
-        class: 'btn primary',
-        id: 'quiz-next',
-        onclick: goToNextQuestion
-      }, '下一題')
-      : h('button', { class: 'btn primary', id: 'quiz-next', onclick: submitQuiz }, '送出答案');
-
     const content = h('div', { class: 'page quiz-page' },
-      h('div', { class: 'quiz-top' },
-        h('div', { class: 'quiz-progress-text', text: '第 ' + (quiz.index + 1) + ' / ' + total + ' 題' }),
-        timerEl
-      ),
-      h('div', { class: 'progress' }, progressFill),
-      createBattleScene(quiz, question, answerArea),
-      h('div', { class: 'quiz-actions' }, prevButton, nextButton)
+      createBattleScene(quiz, question, answerArea)
     );
 
     renderShell(content, 'practice');
-    startTimer(timerEl, quiz.startedAt);
   }
 
-  async function goToNextQuestion() {
+  async function confirmAnswer() {
     const quiz = state.quiz;
-    if (!quiz || state.busy || quiz.index >= quiz.questions.length - 1) return;
+    if (!quiz || state.busy) return;
 
     const question = quiz.questions[quiz.index];
     const rawAnswer = quiz.answers[question.qid];
     const answer = String(rawAnswer === null || rawAnswer === undefined ? '' : rawAnswer);
-    quiz.answerResults = quiz.answerResults || {};
 
-    if (answer.trim() && quiz.answerResults[question.qid] === undefined) {
-      state.busy = true;
-      const nextButton = document.getElementById('quiz-next');
-      const prevButton = document.getElementById('quiz-prev');
-      const controls = document.querySelectorAll(
-        '.battle-question-panel button, .battle-question-panel input, #quiz-prev, #quiz-next'
-      );
-      Array.prototype.forEach.call(controls, function (control) { control.disabled = true; });
-      if (nextButton) nextButton.textContent = '批改中…';
-
-      try {
-        const data = await api('quiz/check', {
-          attempt_id: quiz.attemptId,
-          qid: question.qid,
-          answer: answer
-        });
-        quiz.answerResults[question.qid] = !!data.is_correct;
-      } catch (err) {
-        toast(err.message);
-        Array.prototype.forEach.call(controls, function (control) { control.disabled = false; });
-        if (prevButton) prevButton.disabled = quiz.index === 0;
-        if (nextButton) nextButton.textContent = '下一題';
-        state.busy = false;
-        return;
-      }
-      state.busy = false;
+    if (!answer.trim()) {
+      toast('請先作答，再按「確認答案」。');
+      return;
     }
 
-    quiz.index++;
+    state.busy = true;
+    const confirmButton = document.getElementById('battle-confirm');
+    const controls = document.querySelectorAll(
+      '.battle-question-panel button, .battle-question-panel input, #battle-confirm'
+    );
+    Array.prototype.forEach.call(controls, function (control) { control.disabled = true; });
+    if (confirmButton) confirmButton.textContent = '批改中…';
+
+    let isCorrect;
+    try {
+      const data = await api('quiz/check', {
+        attempt_id: quiz.attemptId,
+        qid: question.qid,
+        answer: answer
+      });
+      isCorrect = !!data.is_correct;
+    } catch (err) {
+      toast(err.message);
+      Array.prototype.forEach.call(controls, function (control) { control.disabled = false; });
+      if (confirmButton) confirmButton.textContent = '確認答案';
+      state.busy = false;
+      return;
+    }
+
+    quiz.answerResults = quiz.answerResults || {};
+    quiz.answerResults[question.qid] = isCorrect;
+    quiz.battleMessage = pickBattleLine(isCorrect ? BATTLE_PRAISE : BATTLE_ENCOURAGE);
     renderQuiz();
+
+    const isLast = quiz.index >= quiz.questions.length - 1;
+    setTimeout(function () {
+      if (state.quiz !== quiz) return;
+      state.busy = false;
+      if (isLast) {
+        submitQuiz();
+      } else {
+        quiz.index += 1;
+        renderQuiz();
+      }
+    }, 1200);
   }
 
   async function submitQuiz() {
@@ -766,25 +785,6 @@
       toast(err.message);
     } finally {
       state.busy = false;
-    }
-  }
-
-  function startTimer(element, startedAt) {
-    clearTimer();
-
-    function tick() {
-      const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-      element.textContent = formatDuration(seconds);
-    }
-
-    tick();
-    state.timer = setInterval(tick, 1000);
-  }
-
-  function clearTimer() {
-    if (state.timer) {
-      clearInterval(state.timer);
-      state.timer = null;
     }
   }
 
@@ -1000,12 +1000,6 @@
     if (type === 'choice') return '選擇題';
     if (type === 'truefalse') return '是非題';
     return '填空題';
-  }
-
-  function formatDuration(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remain = seconds % 60;
-    return String(minutes).padStart(2, '0') + ':' + String(remain).padStart(2, '0');
   }
 
   function formatDate(value) {
