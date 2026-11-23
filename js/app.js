@@ -10,6 +10,7 @@
     result: null,
     history: [],
     historyTotal: 0,
+    achievements: [],
     busy: false
   };
 
@@ -160,6 +161,7 @@
     state.profile = data.profile;
     state.recent = data.recent || [];
     state.subjects = data.subjects || [];
+    state.achievements = data.achievements || [];
   }
 
   /* ---------- Init / routing ---------- */
@@ -217,6 +219,8 @@
         return;
       }
       renderResult();
+    } else if (hash === '#/leaderboard') {
+      renderLeaderboard();
     } else if (hash === '#/shop') {
       renderShop();
     } else if (hash === '#/history') {
@@ -295,6 +299,7 @@
     const navItems = [
       { key: 'home', label: '首頁', hash: '#/home' },
       { key: 'practice', label: '練習', hash: '#/practice' },
+      { key: 'leaderboard', label: '排行', hash: '#/leaderboard' },
       { key: 'shop', label: '商店', hash: '#/shop' },
       { key: 'history', label: '紀錄', hash: '#/history' }
     ];
@@ -336,6 +341,9 @@
 
   function renderHome() {
     const profile = state.profile;
+    const unlockedCount = state.achievements.filter(function (badge) {
+      return badge.unlocked;
+    }).length;
 
     const content = h('div', { class: 'page' },
       h('section', { class: 'hero-card' },
@@ -358,10 +366,30 @@
         state.recent.length
           ? h('div', { class: 'attempt-list' }, state.recent.map(attemptRow))
           : emptyState('還沒有練習紀錄，開始第一次練習吧！')
-      )
+      ),
+      state.achievements.length
+        ? h('section', { class: 'card' },
+          h('div', { class: 'section-head' },
+            h('h2', { text: '我的成就' }),
+            h('span', { class: 'muted', text: unlockedCount + ' / ' + state.achievements.length + ' 已解鎖' })
+          ),
+          h('div', { class: 'badge-grid' }, state.achievements.map(badgeCard))
+        )
+        : null
     );
 
     renderShell(content, 'home');
+  }
+
+  function badgeCard(badge) {
+    return h('div', {
+      class: 'badge-card' + (badge.unlocked ? ' unlocked' : ' locked'),
+      title: badge.desc
+    },
+      h('span', { class: 'badge-icon', text: badge.unlocked ? badge.icon : '🔒' }),
+      h('span', { class: 'badge-name', text: badge.name }),
+      h('span', { class: 'badge-desc', text: badge.desc })
+    );
   }
 
   function attemptRow(attempt) {
@@ -422,7 +450,9 @@
             answers: {},
             answerResults: {},
             battleMessage: BATTLE_INTRO,
-            index: 0
+            index: 0,
+            combo: 0,
+            maxCombo: 0
           };
           navigate('#/quiz');
         } catch (err) {
@@ -509,6 +539,7 @@
     const enemyHp = Math.max(0, total - correctCount);
     const enemyHpPercent = total ? Math.round((enemyHp / total) * 100) : 0;
     const graded = results[question.qid] !== undefined;
+    const combo = Number(quiz.combo || 0);
     const dialogText = quiz.battleMessage || BATTLE_INTRO;
     const team = h('div', { class: 'battle-team-list', role: 'list', 'aria-label': '各題作答結果' });
 
@@ -548,9 +579,14 @@
           h('span', { class: 'battle-eyebrow', text: 'QUIZ BATTLE' }),
           h('h2', { text: '知識對決' })
         ),
-        h('div', { class: 'battle-remaining' },
-          h('span', { class: 'battle-remaining-dot' }),
-          h('span', { text: '挑戰數量 ' + (current + 1) + ' / ' + total + ' 題' })
+        h('div', { class: 'battle-heading-right' },
+          combo >= 2
+            ? h('span', { class: 'battle-combo', text: '🔥 ' + combo + ' 連擊' })
+            : null,
+          h('div', { class: 'battle-remaining' },
+            h('span', { class: 'battle-remaining-dot' }),
+            h('span', { text: '挑戰數量 ' + (current + 1) + ' / ' + total + ' 題' })
+          )
         )
       ),
       h('div', { class: 'battle-team' }, team),
@@ -725,7 +761,19 @@
 
     quiz.answerResults = quiz.answerResults || {};
     quiz.answerResults[question.qid] = isCorrect;
-    quiz.battleMessage = pickBattleLine(isCorrect ? BATTLE_PRAISE : BATTLE_ENCOURAGE);
+
+    if (isCorrect) {
+      quiz.combo = Number(quiz.combo || 0) + 1;
+      quiz.maxCombo = Math.max(Number(quiz.maxCombo || 0), quiz.combo);
+      const praise = pickBattleLine(BATTLE_PRAISE);
+      quiz.battleMessage = quiz.combo >= 2
+        ? '第 ' + quiz.combo + ' 連擊！' + praise
+        : praise;
+    } else {
+      quiz.combo = 0;
+      quiz.battleMessage = pickBattleLine(BATTLE_ENCOURAGE);
+    }
+
     state.busy = false;
 
     if (quiz.index >= quiz.questions.length - 1) {
@@ -775,12 +823,48 @@
       } catch (err) {
         // 成績已送出，即使個人資料更新失敗仍要顯示結果
       }
-      navigate('#/result');
+
+      const perfect = Number(data.question_count) > 0 &&
+        Number(data.correct_count) === Number(data.question_count);
+      if (perfect) {
+        showVictoryOverlay(function () { navigate('#/result'); });
+      } else {
+        navigate('#/result');
+      }
     } catch (err) {
       toast(err.message);
     } finally {
       state.busy = false;
     }
+  }
+
+  function showVictoryOverlay(done) {
+    const config = (window.CONFIG && window.CONFIG.BATTLE) || {};
+    const enemyName = config.ENEMY_NAME || '大木博士';
+    const root = document.getElementById('modal-root');
+    clearNode(root);
+
+    let finished = false;
+    let timer = null;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      clearNode(root);
+      done();
+    }
+
+    const overlay = h('div', { class: 'victory-overlay', onclick: finish },
+      h('div', { class: 'victory-sprite' }, battleSprite(config.ENEMY_SPRITE || 'oak')),
+      h('div', { class: 'victory-text' },
+        h('span', { class: 'victory-eyebrow', text: 'PERFECT!' }),
+        h('h2', { text: enemyName + '認輸了！' }),
+        h('p', { text: '全部答對，太厲害了！點一下繼續。' })
+      )
+    );
+
+    root.appendChild(overlay);
+    timer = setTimeout(finish, 2800);
   }
 
   /* ---------- Result ---------- */
@@ -793,6 +877,8 @@
     }
 
     const score = Math.max(0, Math.min(100, Number(result.score || 0)));
+    const maxCombo = Number(result.max_combo || 0);
+    const comboBonus = Number(result.combo_bonus || 0);
 
     const ring = h('div', { class: 'score-ring' });
     ring.style.background = 'conic-gradient(var(--primary) ' + score + '%, #e5e7eb 0)';
@@ -805,9 +891,18 @@
       h('section', { class: 'card result-card' },
         h('h1', { text: score >= 80 ? '太棒了！' : (score >= 60 ? '做得不錯！' : '再試一次會更好！') }),
         ring,
+        score >= 100
+          ? h('p', { class: 'perfect-line', text: '🏆 完美全對' })
+          : null,
         h('div', { class: 'result-stats' },
           statBox('答對題數', Number(result.correct_count || 0) + ' / ' + Number(result.question_count || 0)),
-          statBox('本次積分', '+' + Number(result.points_earned || 0))
+          statBox('本次積分', '+' + Number(result.points_earned || 0)),
+          maxCombo >= 2
+            ? statBox('最高連擊', '🔥 x' + maxCombo)
+            : null,
+          comboBonus > 0
+            ? statBox('連擊獎勵', '+' + comboBonus + ' 分')
+            : null
         ),
         result.points_capped
           ? h('p', { class: 'notice', text: '今日積分已達上限，這次練習的部分積分未發放。' })
@@ -987,6 +1082,83 @@
     );
 
     renderShell(content, 'history');
+  }
+
+  /* ---------- Leaderboard ---------- */
+
+  let leaderboardScope = 'all';
+
+  async function renderLeaderboard() {
+    renderShell(h('div', { class: 'page' },
+      h('p', { class: 'muted', text: '載入排行榜…' })
+    ), 'leaderboard');
+
+    try {
+      const data = await api('leaderboard', { scope: leaderboardScope });
+      renderLeaderboardView(data);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function renderLeaderboardView(data) {
+    const rows = data.rows || [];
+    const me = data.me;
+
+    const tabs = h('div', { class: 'choice-group' });
+    [
+      { key: 'all', label: '總積分' },
+      { key: 'week', label: '本週' }
+    ].forEach(function (tab) {
+      tabs.appendChild(h('button', {
+        class: 'chip' + (leaderboardScope === tab.key ? ' active' : ''),
+        type: 'button',
+        onclick: function () {
+          if (leaderboardScope === tab.key) return;
+          leaderboardScope = tab.key;
+          renderLeaderboard();
+        }
+      }, tab.label));
+    });
+
+    const content = h('div', { class: 'page' },
+      h('div', { class: 'page-head' },
+        h('h1', { text: '排行榜' }),
+        h('p', {
+          class: 'muted',
+          text: leaderboardScope === 'week'
+            ? '本週（星期一至今）累積的練習積分'
+            : '依累積總積分排名'
+        })
+      ),
+      tabs,
+      me
+        ? h('div', { class: 'my-rank' },
+          h('span', { class: 'my-rank-label', text: '我的名次' }),
+          h('strong', { class: 'my-rank-value', text: '第 ' + me.rank + ' 名' }),
+          h('span', { class: 'muted', text: '⭐ ' + me.points + ' 積分' })
+        )
+        : null,
+      rows.length
+        ? h('div', { class: 'card rank-card' }, rows.map(rankRow))
+        : emptyState('目前還沒有人上榜，開始練習搶第一！')
+    );
+
+    renderShell(content, 'leaderboard');
+  }
+
+  function rankRow(row) {
+    const medal = row.rank === 1 ? '🥇' : (row.rank === 2 ? '🥈' : (row.rank === 3 ? '🥉' : String(row.rank)));
+
+    return h('div', { class: 'rank-row' + (row.is_me ? ' me' : '') },
+      h('span', { class: 'rank-no', text: medal }),
+      avatarEl(row.avatar_id, 'sm'),
+      h('div', { class: 'rank-main' },
+        h('span', { class: 'rank-name', text: row.name || '同學' }),
+        h('span', { class: 'rank-class', text: row['class'] || '' })
+      ),
+      h('span', { class: 'rank-points', text: '⭐ ' + row.points })
+    );
   }
 
   /* ---------- Utils ---------- */
