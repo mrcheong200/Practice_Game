@@ -68,6 +68,76 @@
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
+  /* ---------- Rich text（Markdown + LaTeX） ---------- */
+
+  // $$...$$ / \[...\] 為區塊公式；$...$ / \(...\) 為行內公式
+  const MATH_PATTERN = /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$(?!\$)([^\n$]+?)\$(?!\$)/g;
+
+  function escapeHtml(text) {
+    return String(text === null || text === undefined ? '' : text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderMathHtml(tex, displayMode) {
+    if (window.katex) {
+      try {
+        return window.katex.renderToString(String(tex).trim(), {
+          displayMode: !!displayMode,
+          throwOnError: false,
+          strict: 'ignore'
+        });
+      } catch (err) {
+        // 渲染失敗時退回原文
+      }
+    }
+    return '<code class="math-raw">' + escapeHtml(tex) + '</code>';
+  }
+
+  function renderMarkdown(text) {
+    const safe = escapeHtml(text);
+    if (window.marked && typeof window.marked.parseInline === 'function') {
+      try {
+        return window.marked.parseInline(safe, { gfm: true, breaks: true });
+      } catch (err) {
+        // 退回純文字換行
+      }
+    }
+    return safe.replace(/\n/g, '<br>');
+  }
+
+  function renderRichText(text) {
+    const source = String(text === null || text === undefined ? '' : text);
+    let html = '';
+    let last = 0;
+    let match;
+
+    MATH_PATTERN.lastIndex = 0;
+    while ((match = MATH_PATTERN.exec(source)) !== null) {
+      html += renderMarkdown(source.slice(last, match.index));
+
+      const tex = match[1] !== undefined ? match[1]
+        : (match[2] !== undefined ? match[2]
+          : (match[3] !== undefined ? match[3] : match[4]));
+      const display = match[1] !== undefined || match[2] !== undefined;
+
+      html += renderMathHtml(tex, display);
+      last = MATH_PATTERN.lastIndex;
+    }
+
+    html += renderMarkdown(source.slice(last));
+    return html;
+  }
+
+  function richNode(tag, attrs, text) {
+    const node = h(tag, attrs);
+    node.innerHTML = renderRichText(text);
+    return node;
+  }
+
   function avatarEl(assetKey, size) {
     const avatars = window.AVATARS || {};
     const avatar = avatars[assetKey] || avatars.default || {
@@ -1626,7 +1696,7 @@
             h('span', { class: 'tag', text: question.subject || '練習' }),
             h('span', { class: 'tag type-tag', text: typeLabel(question.type) })
           ),
-          h('h2', { class: 'q-title', text: question.question }),
+          richNode('h2', { class: 'q-title' }, question.question),
           answerArea
         )
       ),
@@ -1678,7 +1748,7 @@
           }
         },
           h('span', { class: 'option-key', text: option.key }),
-          h('span', { class: 'option-text', text: option.text })
+          richNode('span', { class: 'option-text' }, option.text)
         );
         answerArea.appendChild(optionButton);
       });
@@ -1917,14 +1987,14 @@
     return h('div', { class: 'review-row ' + (detail.is_correct ? 'correct' : 'wrong') },
       h('div', { class: 'review-head' },
         h('span', { class: 'review-icon', text: detail.is_correct ? '✅' : '❌' }),
-        h('span', { class: 'review-q', text: detail.question })
+        richNode('span', { class: 'review-q' }, detail.question)
       ),
       h('div', { class: 'review-answers' },
-        h('span', { text: '你的答案：' + (detail.student_answer || '（未作答）') }),
-        h('span', { text: '正確答案：' + detail.correct_answer })
+        richNode('span', null, '你的答案：' + (detail.student_answer || '（未作答）')),
+        richNode('span', null, '正確答案：' + detail.correct_answer)
       ),
       detail.explanation
-        ? h('p', { class: 'review-explanation', text: '解析：' + detail.explanation })
+        ? richNode('p', { class: 'review-explanation' }, '解析：' + detail.explanation)
         : null
     );
   }
