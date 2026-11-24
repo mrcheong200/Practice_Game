@@ -721,6 +721,7 @@
   /* ---------- World ---------- */
 
   const WORLD_TILE = 20;
+  const WORLD_SCALE = 2; // 畫布內部放大倍率（等比例放大且保持像素清晰）
   const WORLD_MAP = [
     '####################',
     '#..................#',
@@ -747,15 +748,40 @@
 
   const WORLD_NPCS = [
     {
-      id: 'math',
-      name: '數學挑戰館主',
+      id: 'math-rookie',
+      name: '數學小弟',
       subject: '數學',
-      col: 5,
+      col: 3,
       row: 2,
-      color: '#f59e0b',
-      letter: '數',
+      color: '#fbbf24',
+      letter: '弟',
+      count: 5,
       available: true,
-      line: '想挑戰數學題嗎？答對可以拿積分喔！'
+      line: '我只出 5 題，先熱身一下吧！'
+    },
+    {
+      id: 'math-brother',
+      name: '數學大哥',
+      subject: '數學',
+      col: 7,
+      row: 2,
+      color: '#f97316',
+      letter: '哥',
+      count: 10,
+      available: true,
+      line: '跟我做 10 題，看看你的實力！'
+    },
+    {
+      id: 'math-gym',
+      name: '數學館主',
+      subject: '數學',
+      col: 10,
+      row: 2,
+      color: '#dc2626',
+      letter: '主',
+      count: 20,
+      available: true,
+      line: '想挑戰 20 題嗎？通過就是數學高手！'
     },
     {
       id: 'trainer',
@@ -869,8 +895,8 @@
 
     const canvas = h('canvas', {
       class: 'world-canvas',
-      width: WORLD_COLS * WORLD_TILE,
-      height: WORLD_ROWS * WORLD_TILE
+      width: WORLD_COLS * WORLD_TILE * WORLD_SCALE,
+      height: WORLD_ROWS * WORLD_TILE * WORLD_SCALE
     });
 
     const dialog = h('div', { class: 'world-dialog', id: 'world-dialog', hidden: true });
@@ -1040,6 +1066,9 @@
   function drawWorld() {
     const ctx = world.ctx;
     if (!ctx) return;
+
+    // 邏輯座標維持以 WORLD_TILE 為單位，透過 transform 等比例放大
+    ctx.setTransform(WORLD_SCALE, 0, 0, WORLD_SCALE, 0, 0);
 
     for (let row = 0; row < WORLD_ROWS; row++) {
       for (let col = 0; col < WORLD_COLS; col++) {
@@ -1310,7 +1339,7 @@
     state.busy = true;
 
     try {
-      await beginQuiz(npc.subject, WORLD_CHALLENGE_COUNT, selection);
+      await beginQuiz(npc.subject, npc.count || WORLD_CHALLENGE_COUNT, selection);
     } catch (err) {
       toast(err.message);
     } finally {
@@ -1324,8 +1353,8 @@
     const rect = world.canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) * (world.canvas.width / rect.width);
     const y = (event.clientY - rect.top) * (world.canvas.height / rect.height);
-    const col = Math.floor(x / WORLD_TILE);
-    const row = Math.floor(y / WORLD_TILE);
+    const col = Math.floor(x / (WORLD_TILE * WORLD_SCALE));
+    const row = Math.floor(y / (WORLD_TILE * WORLD_SCALE));
 
     // 1) 先找 NPC 命中 → 自動走到旁邊（或旁邊就直接對話）
     for (let i = 0; i < WORLD_NPCS.length; i++) {
