@@ -473,6 +473,148 @@
     );
   }
 
+  /* ---------- Chapter / Section 對照表（顯示用，代號對應標題） ---------- */
+
+  const CHAPTER_TITLES = {
+    '1': '第一章',
+    '2': '第二章',
+    '3': '第三章：整式的加減',
+    '4': '第四章',
+    '5': '第五章'
+  };
+
+  const SECTION_TITLES = {
+    '3.1': '整式',
+    '3.2': '同類項',
+    '3.3': '去括號與添括號',
+    '3.4': '整式的加減'
+  };
+
+  function chapterLabel(ch) {
+    return CHAPTER_TITLES[ch] || ('第 ' + ch + ' 章');
+  }
+
+  function sectionLabel(sec) {
+    return sec + (SECTION_TITLES[sec] ? ' ' + SECTION_TITLES[sec] : '');
+  }
+
+  /**
+   * 章節選擇器元件
+   * 用法：
+   *   const picker = buildChapterPicker();
+   *   containerEl.appendChild(picker.el);
+   *   await picker.load('数学');        // 科目改變時重新載入
+   *   const sel = picker.getSelection(); // { chapter: '3', sections: [] } 或 { chapter:'', sections:['3.1','3.2'] }
+   *
+   * 勾選規則：
+   * - 預設全不勾 = 全部範圍（chapter='' sections=[]）
+   * - 勾整章 = 該章全部（chapter='3' sections=[]），此時忽略單節勾選
+   * - 只勾單節 = 那些節（chapter='' sections=[...]）
+   */
+  function buildChapterPicker() {
+    const container = h('div', { class: 'chapter-picker' });
+    let outline = null;
+
+    function clear() {
+      while (container.firstChild) container.removeChild(container.firstChild);
+      outline = null;
+    }
+
+    async function load(subject) {
+      clear();
+      if (!subject) return; // 全部科目時不顯示章節選擇
+
+      container.appendChild(h('p', { class: 'muted tiny', text: '載入章節中…' }));
+      let data;
+      try {
+        data = await api('quiz/outline', { subject: subject });
+      } catch (err) {
+        clear();
+        container.appendChild(h('p', { class: 'muted tiny', text: '章節載入失敗：' + err.message }));
+        return;
+      }
+      clear();
+      outline = data;
+
+      if (!data.chapters || !data.chapters.length) {
+        container.appendChild(h('p', { class: 'muted tiny', text: '此科目尚未設定章節，將從全部題目抽題。' }));
+        return;
+      }
+
+      container.appendChild(h('p', { class: 'field-label', text: '選擇範圍（不勾 = 全部）' }));
+
+      data.chapters.forEach(function (ch) {
+        const chapterBox = h('input', { type: 'checkbox', class: 'chapter-check', 'data-chapter': ch.chapter });
+        const chapterRow = h('label', { class: 'chapter-row' },
+          chapterBox,
+          h('span', { class: 'chapter-title', text: chapterLabel(ch.chapter) })
+        );
+
+        const sectionWrap = h('div', { class: 'section-wrap' });
+        ch.sections.forEach(function (sec) {
+          const secBox = h('input', {
+            type: 'checkbox',
+            class: 'section-check',
+            'data-section': sec.section,
+            'data-chapter': ch.chapter
+          });
+          sectionWrap.appendChild(h('label', { class: 'section-row' },
+            secBox,
+            h('span', { text: sectionLabel(sec.section) + '（' + sec.count + ' 題）' })
+          ));
+
+          // 勾任何一節 → 取消該章的整章勾選
+          secBox.addEventListener('change', function () {
+            if (secBox.checked) chapterBox.checked = false;
+          });
+        });
+
+        // 勾整章 → 取消所有單節
+        chapterBox.addEventListener('change', function () {
+          if (chapterBox.checked) {
+            Array.prototype.forEach.call(sectionWrap.querySelectorAll('.section-check'), function (cb) {
+              cb.checked = false;
+            });
+          }
+        });
+
+        container.appendChild(chapterRow);
+        container.appendChild(sectionWrap);
+      });
+
+      if (data.uncategorized > 0) {
+        container.appendChild(h('p', { class: 'muted tiny',
+          text: '（另有 ' + data.uncategorized + ' 題未分類題目，僅在「全部範圍」時會被抽到）' }));
+      }
+    }
+
+    function getSelection() {
+      if (!outline || !outline.chapters || !outline.chapters.length) {
+        return { chapter: '', sections: [] };
+      }
+
+      // 1) 有勾整章 → 用整章
+      const chapterChecked = container.querySelector('.chapter-check:checked');
+      if (chapterChecked) {
+        return { chapter: chapterChecked.getAttribute('data-chapter'), sections: [] };
+      }
+
+      // 2) 有勾單節 → 用單節清單
+      const secs = [];
+      Array.prototype.forEach.call(container.querySelectorAll('.section-check:checked'), function (cb) {
+        secs.push(cb.getAttribute('data-section'));
+      });
+      if (secs.length) {
+        return { chapter: '', sections: secs };
+      }
+
+      // 3) 都沒勾 → 全部
+      return { chapter: '', sections: [] };
+    }
+
+    return { el: container, load: load, getSelection: getSelection };
+  }
+
   /* ---------- Practice setup ---------- */
 
   function renderPracticeSetup() {
@@ -480,6 +622,11 @@
     select.appendChild(h('option', { value: '', text: '全部科目' }));
     state.subjects.forEach(function (subject) {
       select.appendChild(h('option', { value: subject, text: subject }));
+    });
+
+    const picker = buildChapterPicker();
+    select.addEventListener('change', function () {
+      picker.load(select.value);
     });
 
     let count = 10;
@@ -506,7 +653,8 @@
         startButton.disabled = true;
         startButton.textContent = '準備題目中…';
         try {
-          await beginQuiz(select.value, count);
+          const sel = picker.getSelection();
+          await beginQuiz(select.value, count, sel);
         } catch (err) {
           toast(err.message);
           startButton.disabled = false;
@@ -518,12 +666,16 @@
     const content = h('div', { class: 'page' },
       h('div', { class: 'page-head' },
         h('h1', { text: '開始練習' }),
-        h('p', { class: 'muted', text: '選擇科目與題數，完成後可獲得積分。' })
+        h('p', { class: 'muted', text: '選擇科目、章節與題數，完成後可獲得積分。' })
       ),
       h('section', { class: 'card' },
         h('label', { class: 'field' },
           h('span', { class: 'field-label', text: '科目' }),
           select
+        ),
+        h('div', { class: 'field' },
+          h('span', { class: 'field-label', text: '章節範圍' }),
+          picker.el
         ),
         h('div', { class: 'field' },
           h('span', { class: 'field-label', text: '題數' }),
@@ -534,12 +686,20 @@
     );
 
     renderShell(content, 'world');
+
+    // 預設載入第一個科目的章節（如果有的話）
+    if (select.value) picker.load(select.value);
   }
 
   /* ---------- Quiz start (shared) ---------- */
 
-  async function beginQuiz(subject, count) {
-    const data = await api('quiz/start', { subject: subject || '', count: count });
+  async function beginQuiz(subject, count, options) {
+    const opts = options || {};
+    const payload = { subject: subject || '', count: count };
+    if (opts.chapter) payload.chapter = opts.chapter;
+    if (opts.sections && opts.sections.length) payload.sections = opts.sections;
+
+    const data = await api('quiz/start', payload);
     state.result = null;
     state.quiz = {
       attemptId: data.attempt_id,
@@ -1029,53 +1189,98 @@
     }
   }
 
-  function openWorldDialog(npc) {
+  /**
+   * 兩階段對話框：
+   *   mode='ask'  → 顯示 NPC 台詞 + 「是，開始挑戰」/「否，先逛逛」
+   *   mode='pick' → 顯示章節選擇器 + 「開始」/「返回」
+   * K 鍵在 ask 模式 = 進入 pick；在 pick 模式 = 開始挑戰。
+   * J 鍵在 ask 模式 = 關閉；在 pick 模式 = 回到 ask。
+   */
+  function openWorldDialog(npc, mode) {
     const box = document.getElementById('world-dialog');
     if (!box) return;
 
     world.dialogNpc = npc;
+    world.dialogMode = mode || 'ask';
     world.keys = {};
     clearNode(box);
 
     box.appendChild(h('span', { class: 'world-dialog-name', text: npc.name }));
-    box.appendChild(h('p', { class: 'world-dialog-text', text: npc.line }));
-    box.appendChild(h('div', { class: 'world-dialog-actions' },
-      h('button', {
-        class: 'btn primary tiny',
-        type: 'button',
-        onclick: function () {
-          closeWorldDialog();
-          startWorldChallenge(npc);
-        }
-      }, '是，開始挑戰'),
-      h('button', {
-        class: 'btn ghost tiny',
-        type: 'button',
-        onclick: closeWorldDialog
-      }, '否，先逛逛')
-    ));
-    box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
-      h('kbd', { text: 'K' }), ' 確認 ',
-      h('kbd', { text: 'J' }), ' 取消'
-    ));
+
+    if (world.dialogMode === 'ask') {
+      box.appendChild(h('p', { class: 'world-dialog-text', text: npc.line }));
+      box.appendChild(h('div', { class: 'world-dialog-actions' },
+        h('button', {
+          class: 'btn primary tiny',
+          type: 'button',
+          onclick: function () { openWorldDialog(npc, 'pick'); }
+        }, '是，開始挑戰'),
+        h('button', {
+          class: 'btn ghost tiny',
+          type: 'button',
+          onclick: closeWorldDialog
+        }, '否，先逛逛')
+      ));
+      box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
+        h('kbd', { text: 'K' }), ' 確認 ',
+        h('kbd', { text: 'J' }), ' 取消'
+      ));
+    } else {
+      // pick 模式：載入章節選擇器
+      box.appendChild(h('p', { class: 'world-dialog-text', text: '想練哪一課呢？' }));
+
+      const picker = buildChapterPicker();
+      world.dialogPicker = picker;
+      box.appendChild(picker.el);
+      picker.load(npc.subject);
+
+      box.appendChild(h('div', { class: 'world-dialog-actions' },
+        h('button', {
+          class: 'btn primary tiny',
+          type: 'button',
+          onclick: function () { confirmWorldChallenge(); }
+        }, '開始挑戰'),
+        h('button', {
+          class: 'btn ghost tiny',
+          type: 'button',
+          onclick: function () { openWorldDialog(npc, 'ask'); }
+        }, '返回')
+      ));
+      box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
+        h('kbd', { text: 'K' }), ' 開始 ',
+        h('kbd', { text: 'J' }), ' 返回'
+      ));
+    }
 
     box.hidden = false;
   }
 
   function closeWorldDialog() {
     world.dialogNpc = null;
+    world.dialogMode = null;
+    world.dialogPicker = null;
     const box = document.getElementById('world-dialog');
     if (!box) return;
     box.hidden = true;
     clearNode(box);
   }
 
-  async function startWorldChallenge(npc) {
+  /** 在 pick 模式按 K 或「開始挑戰」時觸發：拿 picker 的選擇，帶入 beginQuiz */
+  async function confirmWorldChallenge() {
+    const npc = world.dialogNpc;
+    const picker = world.dialogPicker;
+    if (!npc) return;
+    const sel = picker ? picker.getSelection() : { chapter: '', sections: [] };
+    closeWorldDialog();
+    await startWorldChallenge(npc, sel);
+  }
+
+  async function startWorldChallenge(npc, selection) {
     if (state.busy) return;
     state.busy = true;
 
     try {
-      await beginQuiz(npc.subject, WORLD_CHALLENGE_COUNT);
+      await beginQuiz(npc.subject, WORLD_CHALLENGE_COUNT, selection);
     } catch (err) {
       toast(err.message);
     } finally {
@@ -1148,12 +1353,14 @@
       return;
     }
 
-    // K / k — 確認（對話框開啟時=開始挑戰；否則=互動 NPC）
+    // K / k — 確認（對話框 ask 模式=進入 pick；pick 模式=開始挑戰；否則=互動 NPC）
     if (event.key === 'k' || event.key === 'K') {
       if (world.dialogNpc) {
-        const npc = world.dialogNpc;
-        closeWorldDialog();
-        startWorldChallenge(npc);
+        if (world.dialogMode === 'pick') {
+          if (!event.repeat) confirmWorldChallenge();
+        } else {
+          openWorldDialog(world.dialogNpc, 'pick');
+        }
       } else {
         if (!event.repeat) tryInteract();
       }
@@ -1161,10 +1368,14 @@
       return;
     }
 
-    // J / j — 取消（對話框開啟時=關閉對話框）
+    // J / j — 取消（ask 模式=關閉；pick 模式=返回 ask）
     if (event.key === 'j' || event.key === 'J') {
       if (world.dialogNpc) {
-        closeWorldDialog();
+        if (world.dialogMode === 'pick') {
+          openWorldDialog(world.dialogNpc, 'ask');
+        } else {
+          closeWorldDialog();
+        }
       }
       event.preventDefault();
       return;
