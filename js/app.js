@@ -537,7 +537,11 @@
       outline = data;
 
       if (!data.chapters || !data.chapters.length) {
-        container.appendChild(h('p', { class: 'muted tiny', text: '此科目尚未設定章節，將從全部題目抽題。' }));
+        const hint = data.uncategorized > 0
+          ? '（共 ' + data.uncategorized + ' 題未標註章節）'
+          : '';
+        container.appendChild(h('p', { class: 'muted tiny',
+          text: '此科目尚未設定章節' + hint + '，將從全部題目抽題。' }));
         return;
       }
 
