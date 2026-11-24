@@ -744,23 +744,25 @@
   const WORLD_NPCS = [
     {
       id: 'math',
-      name: '數學老師',
+      name: '數學挑戰館主',
       subject: '數學',
       col: 5,
       row: 2,
       color: '#f59e0b',
       letter: '數',
+      available: true,
       line: '想挑戰數學題嗎？答對可以拿積分喔！'
     },
     {
-      id: 'english',
-      name: '英文老師',
-      subject: '英文',
+      id: 'trainer',
+      name: '訓練員',
+      subject: '',
       col: 14,
       row: 2,
-      color: '#8b5cf6',
-      letter: '英',
-      line: '來練幾題英文吧，準備好了嗎？'
+      color: '#64748b',
+      letter: '訓',
+      available: false,
+      line: '我還在學習中……'
     }
   ];
 
@@ -775,6 +777,7 @@
     keys: {},
     dialogNpc: null,
     moveQueue: [],
+    avatarKey: 'default',
     player: {
       col: 5,
       row: 3,
@@ -858,6 +861,7 @@
     world.keys = {};
     world.dialogNpc = null;
     world.moveQueue = [];
+    world.avatarKey = (state.profile && state.profile.avatar_id) || 'default';
 
     const canvas = h('canvas', {
       class: 'world-canvas',
@@ -871,7 +875,7 @@
       h('div', { class: 'page-head row' },
         h('div', {},
           h('h1', { text: '練習地圖' }),
-          h('p', { class: 'muted', text: '走到老師旁邊，按 K 或點擊互動。' })
+          h('p', { class: 'muted', text: '走到角色旁邊，按 K 或點擊互動。' })
         ),
         h('button', {
           class: 'btn ghost tiny',
@@ -1130,26 +1134,32 @@
     const x = player.x;
     const y = player.y;
 
+    // 影子
     ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
     ctx.beginPath();
     ctx.ellipse(x, y + 7, 7, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#2563eb';
-    ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
-    ctx.fill();
+    // 玩家頭像（取自學生目前裝備的頭像）
+    const avatars = window.AVATARS || {};
+    const avatar = avatars[world.avatarKey] || avatars.default;
 
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#fffdf2';
+    ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = '#111';
     ctx.stroke();
 
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(x - 2.5, y - 1, 1.6, 0, Math.PI * 2);
-    ctx.arc(x + 2.5, y - 1, 1.6, 0, Math.PI * 2);
-    ctx.fill();
+    if (avatar && avatar.emoji) {
+      ctx.font = '12px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(avatar.emoji, x, y + 1);
+    }
 
+    // 面向指示（小箭頭）
     const dir = {
       up: [0, -1],
       down: [0, 1],
@@ -1157,11 +1167,11 @@
       right: [1, 0]
     }[player.dir] || [0, -1];
 
-    ctx.fillStyle = '#fde68a';
+    ctx.fillStyle = '#111';
     ctx.beginPath();
-    ctx.moveTo(x + dir[0] * 11, y + dir[1] * 11);
-    ctx.lineTo(x + dir[0] * 7 - dir[1] * 3, y + dir[1] * 7 + dir[0] * 3);
-    ctx.lineTo(x + dir[0] * 7 + dir[1] * 3, y + dir[1] * 7 - dir[0] * 3);
+    ctx.moveTo(x + dir[0] * 12, y + dir[1] * 12);
+    ctx.lineTo(x + dir[0] * 8 - dir[1] * 2.5, y + dir[1] * 8 + dir[0] * 2.5);
+    ctx.lineTo(x + dir[0] * 8 + dir[1] * 2.5, y + dir[1] * 8 - dir[0] * 2.5);
     ctx.closePath();
     ctx.fill();
   }
@@ -1209,22 +1219,38 @@
 
     if (world.dialogMode === 'ask') {
       box.appendChild(h('p', { class: 'world-dialog-text', text: npc.line }));
-      box.appendChild(h('div', { class: 'world-dialog-actions' },
-        h('button', {
-          class: 'btn primary tiny',
-          type: 'button',
-          onclick: function () { openWorldDialog(npc, 'pick'); }
-        }, '是，開始挑戰'),
-        h('button', {
-          class: 'btn ghost tiny',
-          type: 'button',
-          onclick: closeWorldDialog
-        }, '否，先逛逛')
-      ));
-      box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
-        h('kbd', { text: 'K' }), ' 確認 ',
-        h('kbd', { text: 'J' }), ' 取消'
-      ));
+
+      if (npc.available === false) {
+        // 尚未開放挑戰的 NPC（例如訓練員）
+        box.appendChild(h('div', { class: 'world-dialog-actions' },
+          h('button', {
+            class: 'btn ghost tiny',
+            type: 'button',
+            onclick: closeWorldDialog
+          }, '關閉')
+        ));
+        box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
+          h('kbd', { text: 'K' }), ' 關閉 ',
+          h('kbd', { text: 'J' }), ' 關閉'
+        ));
+      } else {
+        box.appendChild(h('div', { class: 'world-dialog-actions' },
+          h('button', {
+            class: 'btn primary tiny',
+            type: 'button',
+            onclick: function () { openWorldDialog(npc, 'pick'); }
+          }, '是，開始挑戰'),
+          h('button', {
+            class: 'btn ghost tiny',
+            type: 'button',
+            onclick: closeWorldDialog
+          }, '否，先逛逛')
+        ));
+        box.appendChild(h('span', { class: 'world-dialog-shortcuts' },
+          h('kbd', { text: 'K' }), ' 確認 ',
+          h('kbd', { text: 'J' }), ' 取消'
+        ));
+      }
     } else {
       // pick 模式：載入章節選擇器
       box.appendChild(h('p', { class: 'world-dialog-text', text: '想練哪一課呢？' }));
@@ -1358,6 +1384,8 @@
       if (world.dialogNpc) {
         if (world.dialogMode === 'pick') {
           if (!event.repeat) confirmWorldChallenge();
+        } else if (world.dialogNpc.available === false) {
+          closeWorldDialog(); // 尚未開放的 NPC，K 直接關閉
         } else {
           openWorldDialog(world.dialogNpc, 'pick');
         }
