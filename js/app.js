@@ -825,23 +825,23 @@
 
   const MAIN_BUILDINGS = [
     // 第三章房屋：左上角
+    // 佔用格 col 2..5, row 2..5（4 格寬 × 4 格高）
+    // 門在房屋底排中央（doorRow=5 是 building 最底下那排，isDoorOf 例外可走）
     {
       id: 'math-ch3',
       name: '第三章:整式的加減',
-      // 房屋佔用格：col 2..5, row 2..4（含屋頂）
-      x: 2, y: 2, w: 4, h: 3,
-      // 門：房屋正中央下方一格（在門口可按 K 進入）
+      x: 2, y: 2, w: 4, h: 4,
       doorCol: 4, doorRow: 5,
       locked: false,
       target: 'chapter3',
-      // 從第三章返回主地圖時，玩家出現在門的旁邊
+      // 從章節地圖返回主地圖時，玩家出現在門的下方一格（row 6）
       spawnCol: 4, spawnRow: 6
     },
     // 待定房屋：右上角（鎖住）
     {
       id: 'future-ch',
       name: '章節 4：敬請期待',
-      x: 13, y: 2, w: 4, h: 3,
+      x: 13, y: 2, w: 4, h: 4,
       doorCol: 15, doorRow: 5,
       locked: true,
       target: null,
@@ -903,14 +903,16 @@
 
   const CHAPTER3_BUILDINGS = [
     // 出口房屋（回到主地圖）
+    // 佔用格 col 15..18, row 7..10（4×4）
     {
       id: 'exit-main',
       name: '主地圖',
-      x: 15, y: 9, w: 4, h: 3,
-      doorCol: 17, doorRow: 8,
+      x: 15, y: 7, w: 4, h: 4,
+      doorCol: 17, doorRow: 10,
       locked: false,
       target: 'main',
-      spawnCol: 17, spawnRow: 9
+      // 從主地圖進入章節地圖時，玩家出現在出口門口下方一格
+      spawnCol: 17, spawnRow: 11
     }
   ];
 
@@ -927,8 +929,8 @@
       map: CHAPTER3_MAP,
       buildings: CHAPTER3_BUILDINGS,
       npcs: CHAPTER3_NPCS,
-      // 從主地圖首次進入時的出現位置（出口房屋門口旁）
-      startCol: 17, startRow: 9
+      // 從主地圖進入時，玩家出現在出口房屋門口下方一格
+      startCol: 17, startRow: 11
     }
   };
 
@@ -1314,69 +1316,224 @@
     drawWorldPlayer(ctx);
   }
 
+  /**
+   * 寶可夢 2D 風格房屋繪製（Canvas 2D 像素風）
+   * 建築佔用格 4w × 4h：頂排屋頂三角、第二排屋頂坡面、兩排牆身
+   * 門固定在底排中央（doorCol / doorRow 那格），isDoorOf 例外可走
+   */
   function drawWorldBuilding(ctx, b) {
-    const x = b.x * WORLD_TILE;
-    const y = b.y * WORLD_TILE;
-    const w = b.w * WORLD_TILE;
-    const h = b.h * WORLD_TILE;
+    const x = b.x * WORLD_TILE;       // 左上角 X（邏輯像素）
+    const y = b.y * WORLD_TILE;       // 左上角 Y
+    const w = b.w * WORLD_TILE;       // 80
+    const h = b.h * WORLD_TILE;       // 80
+    const doorTileW = WORLD_TILE;     // 20
+    const doorTileH = WORLD_TILE;     // 20
+    const doorX = b.doorCol * WORLD_TILE;
+    const doorY = b.doorRow * WORLD_TILE;
 
-    // 屋頂（三角形）
-    ctx.fillStyle = b.locked ? '#94a3b8' : '#a94442';
+    const wallColor = b.locked ? '#e2e8f0' : '#fef3c7';
+    const wallShade = b.locked ? '#cbd5e1' : '#fcd34d';
+    const roofColor = b.locked ? '#64748b' : '#dc2626';
+    const roofShadow = b.locked ? '#475569' : '#991b1b';
+    const outline = '#2b1d0e';
+
+    /* ---- 1. 屋頂（紅／灰 gable） ---- */
+    // 屋頂三角（跨 top 兩排）
+    const roofMid = x + w / 2;       // 頂點 X
+    const roofTop = y - 6;           // 屋頂尖稍微往上延伸
+    const roofBot = y + WORLD_TILE * 2; // 屋頂底部（row 1 結束）
+
+    // 屋頂主體（兩側三角形 + 底部矩形拼成完整屋頂）
+    ctx.fillStyle = roofColor;
     ctx.beginPath();
-    ctx.moveTo(x - 4, y + 8);
-    ctx.lineTo(x + w / 2, y - 8);
-    ctx.lineTo(x + w + 4, y + 8);
+    // 左側斜面
+    ctx.moveTo(x - 2, roofBot);       // 屋頂左下（稍微外擴）
+    ctx.lineTo(roofMid, roofTop);     // 屋頂尖
+    ctx.lineTo(roofMid, roofBot);     // 中線到底
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    // 右側斜面
+    ctx.beginPath();
+    ctx.moveTo(roofMid, roofTop);
+    ctx.lineTo(x + w + 2, roofBot);   // 屋頂右下
+    ctx.lineTo(roofMid, roofBot);
+    ctx.closePath();
+    ctx.fill();
+
+    // 屋頂陰影（右側更深，模擬陽光從左邊打來）
+    ctx.fillStyle = roofShadow;
+    ctx.beginPath();
+    ctx.moveTo(roofMid, roofTop);
+    ctx.lineTo(x + w + 2, roofBot);
+    ctx.lineTo(roofMid, roofBot);
+    ctx.closePath();
+    ctx.globalAlpha = 0.55;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // 屋頂外框（簡化：在斜坡邊緣描線）
+    ctx.strokeStyle = outline;
     ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 2, roofBot);
+    ctx.lineTo(roofMid, roofTop);
+    ctx.lineTo(x + w + 2, roofBot);
     ctx.stroke();
 
-    // 屋身（米白色）
-    ctx.fillStyle = b.locked ? '#e2e8f0' : '#fef9e7';
-    ctx.fillRect(x, y + 8, w, h - 8);
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.strokeRect(x + 0.5, y + 8.5, w - 1, h - 9);
+    // 屋頂底部橫線
+    ctx.beginPath();
+    ctx.moveTo(x - 2 + 0.5, roofBot + 0.5);
+    ctx.lineTo(x + w + 2 + 0.5, roofBot + 0.5);
+    ctx.stroke();
 
-    // 門（在 doorCol/doorRow 那格的下半部）
-    if (b.doorCol !== undefined) {
-      const dx = b.doorCol * WORLD_TILE;
-      const dy = b.doorRow * WORLD_TILE;
-      ctx.fillStyle = b.locked ? '#475569' : '#5a3a1a';
-      ctx.fillRect(dx + 4, dy + 6, WORLD_TILE - 8, WORLD_TILE - 6);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(dx + WORLD_TILE - 9, dy + WORLD_TILE / 2 - 1, 2, 2);
+    /* ---- 2. 煙囪（屋頂上的小方塊，偏右側） ---- */
+    const chimX = x + w * 0.68;
+    const chimTop = roofTop + 2;
+    const chimW = 10;
+    const chimH = 14;
+    ctx.fillStyle = roofColor;
+    ctx.fillRect(chimX, chimTop, chimW, chimH);
+    ctx.fillStyle = roofShadow;
+    ctx.fillRect(chimX + chimW - 3, chimTop, 3, chimH);
+    ctx.strokeStyle = outline;
+    ctx.strokeRect(chimX + 0.5, chimTop + 0.5, chimW - 1, chimH - 1);
+
+    /* ---- 3. 屋身（兩排） ---- */
+    const wallTop = roofBot;         // row 2 頂 = y+40
+    const wallBot = y + h;           // row 3 底 = y+80
+
+    ctx.fillStyle = wallColor;
+    ctx.fillRect(x, wallTop, w, h - WORLD_TILE * 2);
+
+    // 牆身陰影（右側 3px 深線 + 底部 3px 深線）
+    ctx.fillStyle = wallShade;
+    ctx.fillRect(x + w - 3, wallTop, 3, h - WORLD_TILE * 2);
+    ctx.fillRect(x, wallBot - 3, w, 3);
+
+    // 牆身瓦片（淡斜線）
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = wallTop + 4; i < wallBot; i += 6) {
+      ctx.beginPath();
+      ctx.moveTo(x + 2 + 0.5, i + 0.5);
+      ctx.lineTo(x + w - 2 + 0.5, i + 0.5);
+      ctx.stroke();
     }
 
-    // 窗（左右各一個）
-    if (w >= 4 && !b.locked) {
-      const wy = y + 14;
-      ctx.fillStyle = '#87ceeb';
-      ctx.fillRect(x + 4, wy, 6, 6);
-      ctx.fillRect(x + w - 10, wy, 6, 6);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.strokeRect(x + 4.5, wy + 0.5, 5, 5);
-      ctx.strokeRect(x + w - 9.5, wy + 0.5, 5, 5);
+    // 屋身外框
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, wallTop + 0.5, w - 1, h - WORLD_TILE * 2 - 1);
+
+    /* ---- 4. 窗（上排牆） ---- */
+    // 左右各一（w=4 tiles，留 door 中央）
+    drawPkmnWindow(ctx, x + 6, wallTop + 6);                         // 左上
+    drawPkmnWindow(ctx, x + w / 2 + 10, wallTop + 6);                // 右上（避開右半）
+
+    /* ---- 5. 門（底排中央，doorCol × doorRow 那格內） ---- */
+    // 門口磁磚 step（比門稍大、稍微往上延伸一格的牆身下緣）
+    // 門在 doorCol=4（tile center x=4*20=80 → doorX=80），doorRow=5（y=100）
+    // 門高度：從上一排牆底到本排底 — 也就是 wallBot 到 wallTop+WORLD_TILE
+    const dTop = wallTop + WORLD_TILE - 4;  // 門頂從 row 3 中間開始（因門要含在 door tile 內）
+    const dBot = wallBot;                  // 門底就是牆底
+    const dW = 10;                         // 門寬（邏輯像素）
+    const dCx = doorX + WORLD_TILE / 2;    // 門中央 X
+    const dLeft = dCx - dW / 2;            // 門左緣
+
+    // 門本體（木頭棕色）
+    ctx.fillStyle = b.locked ? '#334155' : '#6b3f1a';
+    ctx.fillRect(dLeft, dTop, dW, dBot - dTop);
+
+    // 門面板陰影（左深右淺，模擬立體）
+    ctx.fillStyle = b.locked ? '#1e293b' : '#4a2910';
+    ctx.fillRect(dLeft, dTop, 2, dBot - dTop);
+    ctx.fillRect(dLeft + dW - 2, dTop, 2, dBot - dTop);
+
+    // 門框外描線
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(dLeft + 0.5, dTop + 0.5, dW - 1, dBot - dTop - 1);
+
+    // 門把手（金色小點）
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(dLeft + dW - 3, dTop + (dBot - dTop) / 2 + 1, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(dLeft + dW - 3, dTop + (dBot - dTop) / 2 + 1, 1.8, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 門頭雨棚（上方一條小矩形，僅非鎖住房屋）
+    if (!b.locked) {
+      ctx.fillStyle = roofColor;
+      ctx.fillRect(dLeft - 3, dTop - 4, dW + 6, 4);
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(dLeft - 2.5, dTop - 3.5, dW + 5, 3);
     }
 
-    // 門口提示感嘆號（玩家在門旁時）
+    /* ---- 6. 門口草地/階梯（底排 tile 內，門兩側的地面） ---- */
+    // 門左側（dLeft 之前）與右側（dLeft+dW 之後）顯示草地 — 由 drawWorldTile 已畫好
+    // 這裡加一點磁磚 step 紋理在 door tile 內門的下方
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.fillRect(doorX + 2, doorY + doorTileH - 4, doorTileW - 4, 2);
+
+    /* ---- 7. 建築影子 ---- */
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, wallBot + 4, w / 2 - 2, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* ---- 8. 玩家在門旁時顯示感嘆號 ---- */
     const player = world.player;
-    if (Math.abs(b.doorCol - player.col) + Math.abs(b.doorRow - player.row) === 1 ||
-        (player.col === b.doorCol && player.row === b.doorRow)) {
+    const adjacent = Math.abs(b.doorCol - player.col) + Math.abs(b.doorRow - player.row) <= 1;
+    const onDoor = player.col === b.doorCol && player.row === b.doorRow;
+    if (adjacent || onDoor) {
       const cx = b.doorCol * WORLD_TILE + WORLD_TILE / 2;
       const cy = b.doorRow * WORLD_TILE - 2;
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(cx, cy - 4, 5, 0, Math.PI * 2);
+      ctx.arc(cx, cy - 5, 5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
       ctx.fillStyle = '#1f2937';
-      ctx.font = 'bold 8px sans-serif';
+      ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(b.locked ? '🔒' : '!', cx, cy - 3);
+      ctx.fillText(b.locked ? '🔒' : '!', cx, cy - 4);
     }
+  }
 
-    // 建築名稱（畫布外的 DOM 標籤放在頁面標題提示；這裡畫縮寫）
+  /** 寶可夢風格方形窗（雙色玻璃 + 外框 + 中央十字） */
+  function drawPkmnWindow(ctx, x, y) {
+    const size = 12;
+    const border = 1;
+
+    // 窗戶外框（棕色）
+    ctx.fillStyle = '#6b3f1a';
+    ctx.fillRect(x - border, y - border, size + border * 2, size + border * 2);
+
+    // 窗戶玻璃（淺藍，漸層陰影）
+    ctx.fillStyle = '#bae6fd';
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = '#7dd3fc';
+    ctx.fillRect(x + size / 2, y, size / 2, size / 2); // 右上較深
+    ctx.fillRect(x, y + size / 2, size / 2, size / 2); // 左下較深
+
+    // 十字框（白色）
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x + size / 2, y);
+    ctx.lineTo(x + size / 2, y + size);
+    ctx.moveTo(x, y + size / 2);
+    ctx.lineTo(x + size, y + size / 2);
+    ctx.stroke();
   }
 
   function drawWorldTile(ctx, col, row, tile) {
