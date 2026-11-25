@@ -805,6 +805,7 @@
 
   const WORLD_TILE = 20;
   const WORLD_SCALE = 2; // 畫布內部放大倍率（等比例放大且保持像素清晰）
+  const WORLD_STEP_MS = 130; // 走一格所需時間（毫秒），數字越大移動越慢
 
   /* 主地圖：2 個傳送門（章節入口） */
   const MAIN_MAP = [
@@ -1159,28 +1160,29 @@
 
     if (player.moving) {
       player.elapsed += dt;
-      const ratio = Math.min(1, player.elapsed / 200);
+      const ratio = Math.min(1, player.elapsed / WORLD_STEP_MS);
       player.x = player.fromX + (player.toX - player.fromX) * ratio;
       player.y = player.fromY + (player.toY - player.fromY) * ratio;
 
-      if (ratio >= 1) {
-        player.moving = false;
-        player.elapsed = 0;
-        player.x = player.toX;
-        player.y = player.toY;
+      // 這一步還沒走完就直接結束這一幀，不可以再排下一步，
+      // 否則每幀都會重設起點終點而令角色越走越快（有傳送門後的速度 bug）。
+      if (ratio < 1) return;
 
-        // 剛好停下時觸發待處理的傳送門
-        if (player._pendingPortal && !world.dialogNpc) {
-          const pt = player._pendingPortal;
-          player._pendingPortal = null;
-          transitionToScene(pt.target, pt.spawnCol, pt.spawnRow);
-          return;
-        }
+      player.moving = false;
+      player.elapsed = 0;
+      player.x = player.toX;
+      player.y = player.toY;
+
+      // 剛好停下時觸發待處理的傳送門
+      if (player._pendingPortal && !world.dialogNpc) {
+        const pt = player._pendingPortal;
+        player._pendingPortal = null;
+        transitionToScene(pt.target, pt.spawnCol, pt.spawnRow);
+        return;
       }
-      if (world.dialogNpc) return;
-    } else {
-      if (world.dialogNpc) return;
     }
+
+    if (world.dialogNpc) return;
 
     // 優先消化 moveQueue（點擊自動移動）
     if (world.moveQueue.length > 0) {
