@@ -805,7 +805,52 @@
 
   const WORLD_TILE = 20;
   const WORLD_SCALE = 2; // 畫布內部放大倍率（等比例放大且保持像素清晰）
-  const WORLD_MAP = [
+
+  /* 主地圖：2 棟房屋（章節入口） */
+  const MAIN_MAP = [
+    '####################',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '#..................#',
+    '####################'
+  ];
+
+  const MAIN_BUILDINGS = [
+    // 第三章房屋：左上角
+    {
+      id: 'math-ch3',
+      name: '第三章:整式的加減',
+      // 房屋佔用格：col 2..5, row 2..4（含屋頂）
+      x: 2, y: 2, w: 4, h: 3,
+      // 門：房屋正中央下方一格（在門口可按 K 進入）
+      doorCol: 4, doorRow: 5,
+      locked: false,
+      target: 'chapter3',
+      // 從第三章返回主地圖時，玩家出現在門的旁邊
+      spawnCol: 4, spawnRow: 6
+    },
+    // 待定房屋：右上角（鎖住）
+    {
+      id: 'future-ch',
+      name: '章節 4：敬請期待',
+      x: 13, y: 2, w: 4, h: 3,
+      doorCol: 15, doorRow: 5,
+      locked: true,
+      target: null,
+      spawnCol: 15, spawnRow: 6
+    }
+  ];
+
+  /* 章節地圖（代數第三章）：4 個 NPC + 出口房屋 */
+  const CHAPTER3_MAP = [
     '####################',
     '#..................#',
     '#..................#',
@@ -817,10 +862,77 @@
     '#....~~~~..........#',
     '#....~~~~..........#',
     '#..................#',
+    '#..................#',
     '####################'
   ];
-  const WORLD_COLS = WORLD_MAP[0].length;
-  const WORLD_ROWS = WORLD_MAP.length;
+
+  const CHAPTER3_NPCS = [
+    {
+      id: 'math-rookie',
+      name: '數學小弟',
+      subject: '數學',
+      col: 3, row: 2,
+      color: '#fbbf24', letter: '弟', count: 5, available: true,
+      line: '我只出 5 題，先熱身一下吧！'
+    },
+    {
+      id: 'math-brother',
+      name: '數學大哥',
+      subject: '數學',
+      col: 7, row: 2,
+      color: '#f97316', letter: '哥', count: 10, available: true,
+      line: '跟我做 10 題，看看你的實力！'
+    },
+    {
+      id: 'math-gym',
+      name: '數學館主',
+      subject: '數學',
+      col: 10, row: 2,
+      color: '#dc2626', letter: '主', count: 20, available: true,
+      line: '想挑戰 20 題嗎？通過就是數學高手！'
+    },
+    {
+      id: 'trainer',
+      name: '訓練員',
+      subject: '',
+      col: 14, row: 2,
+      color: '#64748b', letter: '訓', available: false,
+      line: '我還在學習中……'
+    }
+  ];
+
+  const CHAPTER3_BUILDINGS = [
+    // 出口房屋（回到主地圖）
+    {
+      id: 'exit-main',
+      name: '主地圖',
+      x: 15, y: 9, w: 4, h: 3,
+      doorCol: 17, doorRow: 8,
+      locked: false,
+      target: 'main',
+      spawnCol: 17, spawnRow: 9
+    }
+  ];
+
+  const SCENES = {
+    main: {
+      title: '主地圖',
+      map: MAIN_MAP,
+      buildings: MAIN_BUILDINGS,
+      npcs: [],
+      startCol: 10, startRow: 10
+    },
+    chapter3: {
+      title: '地圖_代數第三章',
+      map: CHAPTER3_MAP,
+      buildings: CHAPTER3_BUILDINGS,
+      npcs: CHAPTER3_NPCS,
+      // 從主地圖首次進入時的出現位置（出口房屋門口旁）
+      startCol: 17, startRow: 9
+    }
+  };
+
+  const WORLD_CHALLENGE_COUNT = 5;
 
   const WORLD_KEY_MAP = {
     ArrowUp: 'up', w: 'up', W: 'up',
@@ -828,58 +940,6 @@
     ArrowLeft: 'left', a: 'left', A: 'left',
     ArrowRight: 'right', d: 'right', D: 'right'
   };
-
-  const WORLD_NPCS = [
-    {
-      id: 'math-rookie',
-      name: '數學小弟',
-      subject: '數學',
-      col: 3,
-      row: 2,
-      color: '#fbbf24',
-      letter: '弟',
-      count: 5,
-      available: true,
-      line: '我只出 5 題，先熱身一下吧！'
-    },
-    {
-      id: 'math-brother',
-      name: '數學大哥',
-      subject: '數學',
-      col: 7,
-      row: 2,
-      color: '#f97316',
-      letter: '哥',
-      count: 10,
-      available: true,
-      line: '跟我做 10 題，看看你的實力！'
-    },
-    {
-      id: 'math-gym',
-      name: '數學館主',
-      subject: '數學',
-      col: 10,
-      row: 2,
-      color: '#dc2626',
-      letter: '主',
-      count: 20,
-      available: true,
-      line: '想挑戰 20 題嗎？通過就是數學高手！'
-    },
-    {
-      id: 'trainer',
-      name: '訓練員',
-      subject: '',
-      col: 14,
-      row: 2,
-      color: '#64748b',
-      letter: '訓',
-      available: false,
-      line: '我還在學習中……'
-    }
-  ];
-
-  const WORLD_CHALLENGE_COUNT = 5;
 
   const world = {
     active: false,
@@ -891,11 +951,12 @@
     dialogNpc: null,
     moveQueue: [],
     avatarKey: 'default',
+    currentScene: 'main',
     player: {
-      col: 5,
-      row: 3,
-      x: 5 * WORLD_TILE + WORLD_TILE / 2,
-      y: 3 * WORLD_TILE + WORLD_TILE / 2,
+      col: 10,
+      row: 10,
+      x: 0,
+      y: 0,
       dir: 'up',
       fromX: 0,
       fromY: 0,
@@ -906,17 +967,46 @@
     }
   };
 
+  function getScene() { return SCENES[world.currentScene]; }
+  function getSceneCols() { return getScene().map[0].length; }
+  function getSceneRows() { return getScene().map.length; }
+  function getSceneNpcs() { return getScene().npcs; }
+  function getSceneBuildings() { return getScene().buildings; }
+
   function tileAt(col, row) {
-    if (row < 0 || row >= WORLD_ROWS || col < 0 || col >= WORLD_COLS) return '#';
-    return WORLD_MAP[row].charAt(col);
+    const scene = getScene();
+    if (row < 0 || row >= getSceneRows() || col < 0 || col >= getSceneCols()) return '#';
+    return scene.map[row].charAt(col);
+  }
+
+  function buildingAt(col, row) {
+    const buildings = getSceneBuildings();
+    for (let i = 0; i < buildings.length; i++) {
+      const b = buildings[i];
+      if (col >= b.x && col < b.x + b.w && row >= b.y && row < b.y + b.h) {
+        // 門口（doorCol/doorRow）視為建築的一部分但可進出
+        return b;
+      }
+    }
+    return null;
+  }
+
+  function isDoorOf(building, col, row) {
+    return building && building.doorCol === col && building.doorRow === row;
   }
 
   function isWalkable(col, row) {
     const tile = tileAt(col, row);
     if (tile === '#' || tile === 'T' || tile === '~') return false;
 
-    for (let i = 0; i < WORLD_NPCS.length; i++) {
-      if (WORLD_NPCS[i].col === col && WORLD_NPCS[i].row === row) return false;
+    // 建築物內部（含屋頂）不可走，但門口那格可以走
+    const b = buildingAt(col, row);
+    if (b && !isDoorOf(b, col, row)) return false;
+
+    // NPC 佔用格不可走
+    const npcs = getSceneNpcs();
+    for (let i = 0; i < npcs.length; i++) {
+      if (npcs[i].col === col && npcs[i].row === row) return false;
     }
     return true;
   }
@@ -976,10 +1066,12 @@
     world.moveQueue = [];
     world.avatarKey = (state.profile && state.profile.avatar_id) || 'default';
 
+    const scene = getScene();
+
     const canvas = h('canvas', {
       class: 'world-canvas',
-      width: WORLD_COLS * WORLD_TILE * WORLD_SCALE,
-      height: WORLD_ROWS * WORLD_TILE * WORLD_SCALE
+      width: getSceneCols() * WORLD_TILE * WORLD_SCALE,
+      height: getSceneRows() * WORLD_TILE * WORLD_SCALE
     });
 
     const dialog = h('div', { class: 'world-dialog', id: 'world-dialog', hidden: true });
@@ -987,8 +1079,10 @@
     const content = h('div', { class: 'page world-page' },
       h('div', { class: 'page-head row' },
         h('div', {},
-          h('h1', { text: '練習地圖' }),
-          h('p', { class: 'muted', text: '走到角色旁邊，按 K 或點擊互動。' })
+          h('h1', { text: scene.title }),
+          h('p', { class: 'muted', text: scene.title === '主地圖'
+            ? '走到房屋門口按 K 進入章節。'
+            : '走到角色旁邊，按 K 或點擊互動。' })
         ),
         h('button', {
           class: 'btn ghost tiny',
@@ -1011,14 +1105,41 @@
     world.active = true;
     world.lastTime = 0;
 
+    // 玩家位置：若尚未設定（初始進入），用場景起點
     const player = world.player;
-    player.moving = false;
-    player.elapsed = 0;
-    player.x = player.col * WORLD_TILE + WORLD_TILE / 2;
-    player.y = player.row * WORLD_TILE + WORLD_TILE / 2;
+    if (!player._placed) {
+      placePlayerAt(scene.startCol, scene.startRow);
+      player._placed = true;
+    } else {
+      // 重新計算像素座標
+      player.x = player.col * WORLD_TILE + WORLD_TILE / 2;
+      player.y = player.row * WORLD_TILE + WORLD_TILE / 2;
+      player.moving = false;
+      player.elapsed = 0;
+    }
 
     canvas.addEventListener('click', onWorldCanvasClick);
     world.raf = requestAnimationFrame(worldFrame);
+  }
+
+  function placePlayerAt(col, row) {
+    const player = world.player;
+    player.col = col;
+    player.row = row;
+    player.x = col * WORLD_TILE + WORLD_TILE / 2;
+    player.y = row * WORLD_TILE + WORLD_TILE / 2;
+    player.moving = false;
+    player.elapsed = 0;
+  }
+
+  function transitionToScene(sceneKey, playerCol, playerRow) {
+    world.currentScene = sceneKey;
+    world.dialogNpc = null;
+    world.moveQueue = [];
+    placePlayerAt(playerCol, playerRow);
+    world.player._placed = true;
+    // 重建畫布與場景（renderWorld 會呼叫 stopWorld 內部處理）
+    renderWorld();
   }
 
   function buildWorldDpad() {
@@ -1153,17 +1274,109 @@
     // 邏輯座標維持以 WORLD_TILE 為單位，透過 transform 等比例放大
     ctx.setTransform(WORLD_SCALE, 0, 0, WORLD_SCALE, 0, 0);
 
-    for (let row = 0; row < WORLD_ROWS; row++) {
-      for (let col = 0; col < WORLD_COLS; col++) {
+    // 1) 地磚（草地/樹/水等）
+    for (let row = 0; row < getSceneRows(); row++) {
+      for (let col = 0; col < getSceneCols(); col++) {
+        // 建築佔用格（含屋頂）不畫地磚，會被 drawBuilding 完全覆蓋
+        const b = buildingAt(col, row);
+        if (b && !isDoorOf(b, col, row)) continue;
         drawWorldTile(ctx, col, row, tileAt(col, row));
       }
     }
 
-    WORLD_NPCS.forEach(function (npc) {
+    // 2) 建築物（在草地之上、NPC 之下）
+    getSceneBuildings().forEach(function (b) {
+      drawWorldBuilding(ctx, b);
+    });
+
+    // 2.5) 建築名稱標籤（屋頂上方）
+    getSceneBuildings().forEach(function (b) {
+      const cx = (b.x + b.w / 2) * WORLD_TILE;
+      const cy = b.y * WORLD_TILE - 14; // 屋頂尖上方
+      ctx.font = 'bold 9px "Microsoft JhengHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      const name = b.name || '';
+      // 陰影框
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      const tw = ctx.measureText(name).width + 6;
+      ctx.fillRect(cx - tw / 2, cy - 10, tw, 11);
+      ctx.fillStyle = b.locked ? '#f1f5f9' : '#fef9e7';
+      ctx.fillText(name, cx, cy);
+    });
+
+    // 3) NPC
+    getSceneNpcs().forEach(function (npc) {
       drawWorldNpc(ctx, npc);
     });
 
+    // 4) 玩家
     drawWorldPlayer(ctx);
+  }
+
+  function drawWorldBuilding(ctx, b) {
+    const x = b.x * WORLD_TILE;
+    const y = b.y * WORLD_TILE;
+    const w = b.w * WORLD_TILE;
+    const h = b.h * WORLD_TILE;
+
+    // 屋頂（三角形）
+    ctx.fillStyle = b.locked ? '#94a3b8' : '#a94442';
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y + 8);
+    ctx.lineTo(x + w / 2, y - 8);
+    ctx.lineTo(x + w + 4, y + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 屋身（米白色）
+    ctx.fillStyle = b.locked ? '#e2e8f0' : '#fef9e7';
+    ctx.fillRect(x, y + 8, w, h - 8);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.strokeRect(x + 0.5, y + 8.5, w - 1, h - 9);
+
+    // 門（在 doorCol/doorRow 那格的下半部）
+    if (b.doorCol !== undefined) {
+      const dx = b.doorCol * WORLD_TILE;
+      const dy = b.doorRow * WORLD_TILE;
+      ctx.fillStyle = b.locked ? '#475569' : '#5a3a1a';
+      ctx.fillRect(dx + 4, dy + 6, WORLD_TILE - 8, WORLD_TILE - 6);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(dx + WORLD_TILE - 9, dy + WORLD_TILE / 2 - 1, 2, 2);
+    }
+
+    // 窗（左右各一個）
+    if (w >= 4 && !b.locked) {
+      const wy = y + 14;
+      ctx.fillStyle = '#87ceeb';
+      ctx.fillRect(x + 4, wy, 6, 6);
+      ctx.fillRect(x + w - 10, wy, 6, 6);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.strokeRect(x + 4.5, wy + 0.5, 5, 5);
+      ctx.strokeRect(x + w - 9.5, wy + 0.5, 5, 5);
+    }
+
+    // 門口提示感嘆號（玩家在門旁時）
+    const player = world.player;
+    if (Math.abs(b.doorCol - player.col) + Math.abs(b.doorRow - player.row) === 1 ||
+        (player.col === b.doorCol && player.row === b.doorRow)) {
+      const cx = b.doorCol * WORLD_TILE + WORLD_TILE / 2;
+      const cy = b.doorRow * WORLD_TILE - 2;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 4, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1f2937';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.locked ? '🔒' : '!', cx, cy - 3);
+    }
+
+    // 建築名稱（畫布外的 DOM 標籤放在頁面標題提示；這裡畫縮寫）
   }
 
   function drawWorldTile(ctx, col, row, tile) {
@@ -1298,8 +1511,21 @@
   }
 
   function adjacentNpc() {
-    for (let i = 0; i < WORLD_NPCS.length; i++) {
-      if (isAdjacentToPlayer(WORLD_NPCS[i])) return WORLD_NPCS[i];
+    const npcs = getSceneNpcs();
+    for (let i = 0; i < npcs.length; i++) {
+      if (isAdjacentToPlayer(npcs[i])) return npcs[i];
+    }
+    return null;
+  }
+
+  /** 玩家是否正站在某建築的門口（或相鄰一格） */
+  function adjacentOrOnDoor() {
+    const player = world.player;
+    const buildings = getSceneBuildings();
+    for (let i = 0; i < buildings.length; i++) {
+      const b = buildings[i];
+      if (player.col === b.doorCol && player.row === b.doorRow) return b;
+      if (Math.abs(b.doorCol - player.col) + Math.abs(b.doorRow - player.row) === 1) return b;
     }
     return null;
   }
@@ -1307,11 +1533,26 @@
   function tryInteract() {
     if (!world.active || world.dialogNpc) return;
 
+    // 優先處理：建築門口
+    const building = adjacentOrOnDoor();
+    if (building) {
+      if (building.locked) {
+        toast('這裡還沒開放，敬請期待。');
+        return;
+      }
+      // 切換場景：進入 / 離開房屋
+      const targetScene = building.target;
+      if (targetScene && SCENES[targetScene]) {
+        transitionToScene(targetScene, building.spawnCol, building.spawnRow);
+      }
+      return;
+    }
+
     const npc = adjacentNpc();
     if (npc) {
       openWorldDialog(npc);
     } else {
-      toast('再走近一點，才能和老師對話。');
+      toast('再走近一點，才能互動。');
     }
   }
 
@@ -1440,20 +1681,43 @@
     const row = Math.floor(y / (WORLD_TILE * WORLD_SCALE));
 
     // 1) 先找 NPC 命中 → 自動走到旁邊（或旁邊就直接對話）
-    for (let i = 0; i < WORLD_NPCS.length; i++) {
-      const npc = WORLD_NPCS[i];
+    const npcs = getSceneNpcs();
+    for (let i = 0; i < npcs.length; i++) {
+      const npc = npcs[i];
       if (npc.col !== col || npc.row !== row) continue;
 
-      if (world.dialogNpc) return; // 對話框顯示中先忽略
+      if (world.dialogNpc) return;
       if (isAdjacentToPlayer(npc)) {
         openWorldDialog(npc);
       } else {
-        // 自動走到 NPC 旁邊最近一格
         const path = findPath(world.player.col, world.player.row, npc.col, npc.row);
         if (path && path.length > 0) {
           world.moveQueue = path;
         } else {
           toast('無法走到' + npc.name + '旁邊。');
+        }
+      }
+      return;
+    }
+
+    // 1.5) 建築命中 → 門口：走向門口 / 屋身：顯示建築提示
+    const clickedBuilding = buildingAt(col, row);
+    if (clickedBuilding) {
+      if (isDoorOf(clickedBuilding, col, row)) {
+        // 門口那格，走向它（或若玩家已經在旁，直接互動）
+        if (Math.abs(clickedBuilding.doorCol - world.player.col) + Math.abs(clickedBuilding.doorRow - world.player.row) <= 1) {
+          tryInteract();
+        } else {
+          const path = findPath(world.player.col, world.player.row, clickedBuilding.doorCol, clickedBuilding.doorRow);
+          if (path && path.length > 0) world.moveQueue = path;
+          else toast('無法走到門口。');
+        }
+      } else {
+        // 屋身內部
+        if (clickedBuilding.locked) {
+          toast('這裡還沒開放，敬請期待。');
+        } else {
+          toast('走到這棟房屋門口按 K 進入「' + clickedBuilding.name + '」。');
         }
       }
       return;
@@ -1470,16 +1734,15 @@
     if (tile === '#') { toast('那裡是邊界。'); return; }
     if (tile === 'T') { toast('樹擋住了去路。'); return; }
     if (tile === '~') { toast('水太深，過不去。'); return; }
-    // 沙地 '=' 和草地 '.' 可走
 
-    if (col === world.player.col && row === world.player.row) return; // 點自己
+    if (col === world.player.col && row === world.player.row) return;
 
     const path = findPath(world.player.col, world.player.row, col, row);
     if (path === null) {
       toast('那裡走不過去。');
       return;
     }
-    if (path.length === 0) return; // 已經在那
+    if (path.length === 0) return;
 
     world.moveQueue = path;
   }

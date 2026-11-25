@@ -1874,7 +1874,8 @@ button {
   opacity: 0;
 }
 
-@media (min-width: 761px) {
+/* 手機版（< 761px）隱藏 dpad 與 A 按鍵，改用點擊地圖 */
+@media (max-width: 760px) {
   .world-controls {
     display: none;
   }
