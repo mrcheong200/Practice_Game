@@ -1059,7 +1059,11 @@
     }
 
     canvas.addEventListener('click', onWorldCanvasClick);
-    world.raf = requestAnimationFrame(worldFrame);
+
+    // 世代編號 +1：任何舊迴圈看到 gen 不符就會自行結束
+    world.frameGen = (world.frameGen || 0) + 1;
+    const gen = world.frameGen;
+    world.raf = requestAnimationFrame(function (t) { worldFrame(t, gen); });
   }
 
   function placePlayerAt(col, row) {
@@ -1128,14 +1132,24 @@
     world.ctx = null;
   }
 
-  function worldFrame(ts) {
-    if (!world.active) return;
+  /**
+   * 遊戲主迴圈。
+   * gen 是「世代編號」：切換場景時 renderWorld() 會 +1 並啟動新迴圈，
+   * 舊迴圈在 updateWorld 之後發現 gen 不符就自動停止，避免多個迴圈並存
+   * 導致角色移動與傳送門動畫速度倍增。
+   */
+  function worldFrame(ts, gen) {
+    if (!world.active || gen !== world.frameGen) return;
 
     const dt = world.lastTime ? Math.min(60, ts - world.lastTime) : 16;
     world.lastTime = ts;
     updateWorld(dt);
+
+    // updateWorld 內可能已切換場景（gen 改變），此時交棒給新迴圈
+    if (!world.active || gen !== world.frameGen) return;
+
     drawWorld();
-    world.raf = requestAnimationFrame(worldFrame);
+    world.raf = requestAnimationFrame(function (t) { worldFrame(t, gen); });
   }
 
   function updateWorld(dt) {
