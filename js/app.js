@@ -826,55 +826,53 @@
 
   const MAIN_PORTALS = [
     { id: 'math-ch3', name: '第三章:整式的加減', col: 4, row: 5,
-      locked: false, target: 'chapter3', spawnCol: 17, spawnRow: 11 },
+      locked: false, target: 'chapter3', spawnCol: 6, spawnRow: 7 },
     { id: 'future-ch', name: '章節 4：敬請期待', col: 15, row: 5,
       locked: true, target: null, spawnCol: 15, spawnRow: 6 }
   ];
 
-  /* 章節地圖（代數第三章）：4 個 NPC + 出口傳送門 */
+  /* 章節地圖（代數第三章）：13×10 石頭主題，中央縱向排列 3 個 NPC + 底部出口傳送門 */
   const CHAPTER3_MAP = [
-    '####################',
-    '#..................#',
-    '#..................#',
-    '#..................#',
-    '#..T...........T...#',
-    '#.......====.......#',
-    '#.......====.......#',
-    '#..................#',
-    '#....~~~~..........#',
-    '#....~~~~..........#',
-    '#..................#',
-    '#..................#',
-    '####################'
+    '#############',
+    '#..o.....o..#',
+    '#...........#',
+    '#..o........#',
+    '#...........#',
+    '#.........o.#',
+    '#...........#',
+    '#.o.........#',
+    '#...........#',
+    '#############'
   ];
 
   const CHAPTER3_NPCS = [
-    { id: 'math-rookie', name: '數學小弟', subject: '數學', col: 3, row: 2,
+    { id: 'math-rookie', name: '數學小弟', subject: '數學', col: 6, row: 6,
       color: '#fbbf24', letter: '弟', count: 5, available: true,
       line: '我只出 5 題，先熱身一下吧！' },
-    { id: 'math-brother', name: '數學大哥', subject: '數學', col: 7, row: 2,
+    { id: 'math-brother', name: '數學大哥', subject: '數學', col: 6, row: 4,
       color: '#f97316', letter: '哥', count: 10, available: true,
       line: '跟我做 10 題，看看你的實力！' },
-    { id: 'math-gym', name: '數學館主', subject: '數學', col: 10, row: 2,
+    { id: 'math-gym', name: '數學館主', subject: '數學', col: 6, row: 2,
       color: '#dc2626', letter: '主', count: 20, available: true,
       line: '想挑戰 20 題嗎？通過就是數學高手！' },
-    { id: 'trainer', name: '訓練員', subject: '', col: 14, row: 2,
+    { id: 'trainer', name: '訓練員', subject: '', col: 10, row: 8,
       color: '#64748b', letter: '訓', available: false,
       line: '我還在學習中……' }
   ];
 
   const CHAPTER3_PORTALS = [
-    { id: 'exit-main', name: '主地圖', col: 17, row: 10,
-      locked: false, target: 'main', spawnCol: 4, spawnRow: 6 }
+    { id: 'exit-main', name: '主地圖', col: 6, row: 8,
+      locked: false, target: 'main', spawnCol: 4, spawnRow: 6,
+      labelDx: -52, labelDy: 34 }
   ];
 
   const SCENES = {
-    main: { title: '主地圖', map: MAIN_MAP,
+    main: { title: '主地圖', theme: 'grass', map: MAIN_MAP,
       portals: MAIN_PORTALS, npcs: [],
       startCol: 10, startRow: 10 },
-    chapter3: { title: '地圖_代數第三章', map: CHAPTER3_MAP,
+    chapter3: { title: '地圖_代數第三章', theme: 'stone', map: CHAPTER3_MAP,
       portals: CHAPTER3_PORTALS, npcs: CHAPTER3_NPCS,
-      startCol: 17, startRow: 11 }
+      startCol: 6, startRow: 7 }
   };
 
   // 傳送門動畫幀計數（全局）
@@ -937,7 +935,7 @@
 
   function isWalkable(col, row) {
     const tile = tileAt(col, row);
-    if (tile === '#' || tile === 'T' || tile === '~') return false;
+    if (tile === '#' || tile === 'T' || tile === '~' || tile === 'o') return false;
 
     // 傳送門那格可以走（踩到會自動傳送）
     // NPC 佔用格不可走
@@ -1264,14 +1262,16 @@
       drawPortal(ctx, p);
     });
 
-    // 2.5) 傳送門名稱標籤（在門上方）
+    // 2.5) 傳送門名稱標籤（預設在門上方，可用 labelDx/labelDy 微調）
     getScenePortals().forEach(function (p) {
-      const cx = p.col * WORLD_TILE + WORLD_TILE / 2;
-      const cy = p.row * WORLD_TILE - 24;
+      const name = (p.locked ? '🔒 ' : '') + (p.name || '');
+      if (!name) return;
+
+      const cx = p.col * WORLD_TILE + WORLD_TILE / 2 + (p.labelDx || 0);
+      const cy = p.row * WORLD_TILE - 24 + (p.labelDy || 0);
       ctx.font = 'bold 9px "Microsoft JhengHei", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      const name = (p.locked ? '🔒 ' : '') + (p.name || '');
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       const tw = ctx.measureText(name).width + 6;
       ctx.fillRect(cx - tw / 2, cy - 10, tw, 11);
@@ -1408,6 +1408,25 @@
       return;
     }
 
+    if ((getScene().theme || 'grass') === 'stone') {
+      // 石地：暖灰色石磚，交錯明暗 + 石縫與斑點
+      ctx.fillStyle = ((col + row) % 2 === 0) ? '#8f8c86' : '#8a8781';
+      ctx.fillRect(x, y, WORLD_TILE, WORLD_TILE);
+      ctx.fillStyle = 'rgba(70, 66, 60, 0.20)';
+      ctx.fillRect(x, y + WORLD_TILE - 1, WORLD_TILE, 1);
+      ctx.fillRect(x + WORLD_TILE - 1, y, 1, WORLD_TILE);
+      ctx.fillStyle = 'rgba(70, 66, 60, 0.16)';
+      ctx.fillRect(x + 4, y + 5, 3, 2);
+      ctx.fillRect(x + 12, y + 13, 4, 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+      ctx.fillRect(x + 2, y + 2, 2, 2);
+      ctx.fillRect(x + 9, y + 9, 2, 2);
+
+      if (tile === '#' || tile === 'T') drawStoneWall(ctx, x, y);
+      else if (tile === 'o') drawStoneRock(ctx, x, y);
+      return;
+    }
+
     ctx.fillStyle = ((col + row) % 2 === 0) ? '#7ec850' : '#77bf4a';
     ctx.fillRect(x, y, WORLD_TILE, WORLD_TILE);
 
@@ -1427,6 +1446,70 @@
       ctx.arc(x + WORLD_TILE / 2 - 2, y + 8, 5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  /** 石牆（岩壁），用於石頭主題地圖的邊界 */
+  function drawStoneWall(ctx, x, y) {
+    const S = WORLD_TILE;
+    ctx.fillStyle = '#5c5b57';
+    ctx.fillRect(x, y, S, S);
+
+    // 上排石磚（較亮）
+    ctx.fillStyle = '#6e6c67';
+    ctx.fillRect(x + 1, y + 1, S - 2, 8);
+
+    // 磚縫
+    ctx.fillStyle = '#454440';
+    ctx.fillRect(x, y + 9, S, 1);
+    ctx.fillRect(x + 9, y + 1, 1, 8);
+    ctx.fillRect(x + 4, y + 10, 1, 9);
+    ctx.fillRect(x + 14, y + 10, 1, 9);
+    ctx.fillRect(x, y + S - 1, S, 1);
+
+    // 高光
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.fillRect(x + 2, y + 2, 6, 1);
+  }
+
+  /** 石頭障礙物 */
+  function drawStoneRock(ctx, x, y) {
+    // 影子
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x + 10, y + 16, 8, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 石頭主體
+    ctx.fillStyle = '#71706b';
+    ctx.beginPath();
+    ctx.moveTo(x + 3, y + 15);
+    ctx.lineTo(x + 4, y + 9);
+    ctx.lineTo(x + 8, y + 5);
+    ctx.lineTo(x + 13, y + 5);
+    ctx.lineTo(x + 17, y + 10);
+    ctx.lineTo(x + 17, y + 15);
+    ctx.closePath();
+    ctx.fill();
+
+    // 亮面
+    ctx.fillStyle = '#918f89';
+    ctx.beginPath();
+    ctx.moveTo(x + 5, y + 10);
+    ctx.lineTo(x + 8, y + 6);
+    ctx.lineTo(x + 13, y + 6);
+    ctx.lineTo(x + 11, y + 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // 暗面
+    ctx.fillStyle = '#575651';
+    ctx.beginPath();
+    ctx.moveTo(x + 11, y + 10);
+    ctx.lineTo(x + 17, y + 10);
+    ctx.lineTo(x + 17, y + 15);
+    ctx.lineTo(x + 10, y + 15);
+    ctx.closePath();
+    ctx.fill();
   }
 
   function drawWorldNpc(ctx, npc) {
@@ -1704,6 +1787,7 @@
     if (tile === '#') { toast('那裡是邊界。'); return; }
     if (tile === 'T') { toast('樹擋住了去路。'); return; }
     if (tile === '~') { toast('水太深，過不去。'); return; }
+    if (tile === 'o') { toast('石頭擋住了去路。'); return; }
 
     if (col === world.player.col && row === world.player.row) return;
 
