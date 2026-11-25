@@ -997,6 +997,10 @@
   }
 
   function renderWorld() {
+    // 先清掉上一次的 animation frame & canvas 監聽，避免 transitionToScene
+    // 連續呼叫 renderWorld 時殘留多個 worldFrame 迴圈造成速度倍增
+    stopWorld();
+
     world.keys = {};
     world.dialogNpc = null;
     world.moveQueue = [];
@@ -1141,7 +1145,7 @@
 
     if (player.moving) {
       player.elapsed += dt;
-      const ratio = Math.min(1, player.elapsed / 130);
+      const ratio = Math.min(1, player.elapsed / 200);
       player.x = player.fromX + (player.toX - player.fromX) * ratio;
       player.y = player.fromY + (player.toY - player.fromY) * ratio;
 
