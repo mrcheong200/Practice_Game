@@ -831,39 +831,39 @@
       locked: true, target: null, spawnCol: 15, spawnRow: 6 }
   ];
 
-  /* 章節地圖（代數第三章）：13×10 石頭主題，中央縱向排列 3 個 NPC + 底部出口傳送門 */
+  /* 章節地圖（代數第三章）：13×10 石頭主題，o 為石頭障礙物 */
   const CHAPTER3_MAP = [
     '#############',
-    '#..o.....o..#',
+    '#.ooo...ooo.#',
+    '#.......o...#',
+    '#..ooooo....#',
+    '#........o..#',
+    '#oooooooo...#',
     '#...........#',
-    '#..o........#',
-    '#...........#',
-    '#.........o.#',
-    '#...........#',
-    '#.o.........#',
-    '#...........#',
+    '#.oo........#',
+    '#ooo........#',
     '#############'
   ];
 
   const CHAPTER3_NPCS = [
-    { id: 'math-rookie', name: '數學小弟', subject: '數學', col: 6, row: 6,
+    { id: 'math-rookie', name: '數學小弟', subject: '數學', col: 1, row: 7,
       color: '#fbbf24', letter: '弟', count: 5, available: true,
       line: '我只出 5 題，先熱身一下吧！' },
-    { id: 'math-brother', name: '數學大哥', subject: '數學', col: 6, row: 4,
+    { id: 'math-brother', name: '數學大哥', subject: '數學', col: 9, row: 5,
       color: '#f97316', letter: '哥', count: 10, available: true,
       line: '跟我做 10 題，看看你的實力！' },
-    { id: 'math-gym', name: '數學館主', subject: '數學', col: 6, row: 2,
+    { id: 'math-gym', name: '數學館主', subject: '數學', col: 6, row: 1,
       color: '#dc2626', letter: '主', count: 20, available: true,
       line: '想挑戰 20 題嗎？通過就是數學高手！' },
     { id: 'trainer', name: '訓練員', subject: '', col: 10, row: 8,
       color: '#64748b', letter: '訓', available: false,
-      line: '我還在學習中……' }
+      line: '這個道館為「代數第三章：整式的加減」的內容，你準備好接受挑戰了嗎?' }
   ];
 
   const CHAPTER3_PORTALS = [
     { id: 'exit-main', name: '主地圖', col: 6, row: 8,
       locked: false, target: 'main', spawnCol: 4, spawnRow: 6,
-      labelDx: -52, labelDy: 34 }
+      labelDx: 0, labelDy: 62 }
   ];
 
   const SCENES = {
