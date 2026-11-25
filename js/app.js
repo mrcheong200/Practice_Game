@@ -11,7 +11,8 @@
     history: [],
     historyTotal: 0,
     achievements: [],
-    busy: false
+    busy: false,
+    isTeacher: false
   };
 
   let loginMessage = '';
@@ -232,6 +233,7 @@
     state.recent = data.recent || [];
     state.subjects = data.subjects || [];
     state.achievements = data.achievements || [];
+    state.isTeacher = !!(data.is_teacher || (data.profile && data.profile.is_teacher));
   }
 
   /* ---------- Init / routing ---------- */
@@ -299,6 +301,12 @@
       renderShop();
     } else if (hash === '#/history') {
       renderHistory();
+    } else if (hash === '#/teacher') {
+      if (!state.isTeacher) {
+        navigate('#/home');
+        return;
+      }
+      renderTeacher();
     } else {
       renderHome();
     }
@@ -313,6 +321,7 @@
     state.result = null;
     state.recent = [];
     state.subjects = [];
+    state.isTeacher = false;
 
     try {
       history.replaceState(null, '', location.pathname + location.search);
@@ -437,6 +446,10 @@
       { key: 'shop', label: '商店', hash: '#/shop' },
       { key: 'history', label: '紀錄', hash: '#/history' }
     ];
+
+    if (state.isTeacher) {
+      navItems.push({ key: 'teacher', label: '教師後台', hash: '#/teacher' });
+    }
 
     const nav = h('nav', { class: 'nav' });
     navItems.forEach(function (item) {
@@ -2104,6 +2117,261 @@
     } catch (err) {
       toast(err.message);
     }
+  }
+
+  /* ---------- Teacher dashboard ---------- */
+
+  const teacherFilters = { 'class': '', subject: '', from: '', to: '' };
+  let teacherRows = [];
+  let teacherClassOptions = [];
+  let teacherSubjectOptions = [];
+  let teacherLoading = false;
+
+  async function renderTeacher() {
+    teacherLoading = true;
+    renderShell(teacherPage(), 'teacher');
+    await refreshTeacherSummary();
+  }
+
+  async function refreshTeacherSummary() {
+    teacherLoading = true;
+    try {
+      const data = await api('teacher/summary', teacherFilters);
+      teacherRows = data.students || [];
+      teacherClassOptions = data.classes || [];
+      teacherSubjectOptions = data.subjects || [];
+    } catch (err) {
+      toast(err.message);
+    }
+    teacherLoading = false;
+    renderShell(teacherPage(), 'teacher');
+  }
+
+  function teacherPage() {
+    return h('div', { class: 'page' },
+      h('div', { class: 'page-head' },
+        h('h1', { text: '教師後台' }),
+        h('p', { class: 'muted', text: '每位學生一列，查看練習次數、平均分數、最高分數與最後練習時間。' })
+      ),
+      h('section', { class: 'card' },
+        teacherFilterBar(),
+        h('div', { class: 'teacher-actions' },
+          h('span', { class: 'muted', text: teacherLoading ? '載入中…' : '共 ' + teacherRows.length + ' 位學生' }),
+          h('div', { class: 'teacher-action-btns' },
+            h('button', {
+              class: 'btn tiny ghost',
+              onclick: function () { refreshTeacherSummary(); }
+            }, '重新整理'),
+            h('button', {
+              class: 'btn tiny ghost',
+              onclick: downloadTeacherCsv
+            }, '下載 CSV'),
+            h('button', {
+              class: 'btn tiny primary',
+              onclick: copyTeacherTable
+            }, '複製到 Excel')
+          )
+        ),
+        teacherRows.length
+          ? teacherTable()
+          : emptyState('沒有符合條件的學生。')
+      )
+    );
+  }
+
+  function teacherFilterBar() {
+    const classSelect = h('select', { class: 'teacher-select' },
+      h('option', { value: '' }, '全部班別')
+    );
+    teacherClassOptions.forEach(function (item) {
+      classSelect.appendChild(h('option', { value: item }, item));
+    });
+    classSelect.value = teacherFilters['class'];
+    classSelect.addEventListener('change', function () {
+      teacherFilters['class'] = classSelect.value;
+      refreshTeacherSummary();
+    });
+
+    const subjectSelect = h('select', { class: 'teacher-select' },
+      h('option', { value: '' }, '全部科目')
+    );
+    teacherSubjectOptions.forEach(function (item) {
+      subjectSelect.appendChild(h('option', { value: item }, item));
+    });
+    subjectSelect.value = teacherFilters.subject;
+    subjectSelect.addEventListener('change', function () {
+      teacherFilters.subject = subjectSelect.value;
+      refreshTeacherSummary();
+    });
+
+    const fromInput = h('input', { class: 'teacher-input', type: 'date' });
+    fromInput.value = teacherFilters.from;
+    fromInput.addEventListener('change', function () {
+      teacherFilters.from = fromInput.value;
+      refreshTeacherSummary();
+    });
+
+    const toInput = h('input', { class: 'teacher-input', type: 'date' });
+    toInput.value = teacherFilters.to;
+    toInput.addEventListener('change', function () {
+      teacherFilters.to = toInput.value;
+      refreshTeacherSummary();
+    });
+
+    return h('div', { class: 'teacher-filters' },
+      h('label', { class: 'teacher-field' }, h('span', { text: '班別' }), classSelect),
+      h('label', { class: 'teacher-field' }, h('span', { text: '科目' }), subjectSelect),
+      h('label', { class: 'teacher-field' }, h('span', { text: '開始日期' }), fromInput),
+      h('label', { class: 'teacher-field' }, h('span', { text: '結束日期' }), toInput),
+      h('button', {
+        class: 'btn tiny ghost teacher-reset',
+        onclick: resetTeacherFilters
+      }, '重設')
+    );
+  }
+
+  function teacherTable() {
+    const tbody = h('tbody');
+
+    teacherRows.forEach(function (row) {
+      tbody.appendChild(h('tr', null,
+        h('td', null,
+          h('span', { class: 'teacher-name', text: row.name || row.email }),
+          h('span', { class: 'teacher-email', text: row.email })
+        ),
+        h('td', { text: row['class'] || '—' }),
+        h('td', { class: 'num', text: row.attempts }),
+        h('td', { class: 'num', text: row.attempts ? row.avg_score : '—' }),
+        h('td', { class: 'num', text: row.attempts ? row.best_score : '—' }),
+        h('td', { text: formatTeacherDate(row.last_practice) })
+      ));
+    });
+
+    return h('div', { class: 'teacher-table-wrap' },
+      h('table', { class: 'teacher-table' },
+        h('thead', null,
+          h('tr', null,
+            h('th', { text: '學生' }),
+            h('th', { text: '班別' }),
+            h('th', { class: 'num', text: '練習次數' }),
+            h('th', { class: 'num', text: '平均分數' }),
+            h('th', { class: 'num', text: '最高分數' }),
+            h('th', { text: '最後練習' })
+          )
+        ),
+        tbody
+      )
+    );
+  }
+
+  function teacherTableMatrix() {
+    const matrix = [['學生', '班別', '電郵', '練習次數', '平均分數', '最高分數', '最後練習']];
+
+    teacherRows.forEach(function (row) {
+      matrix.push([
+        row.name || '',
+        row['class'] || '',
+        row.email || '',
+        row.attempts,
+        row.attempts ? row.avg_score : '',
+        row.attempts ? row.best_score : '',
+        formatTeacherDate(row.last_practice)
+      ]);
+    });
+
+    return matrix;
+  }
+
+  function copyTeacherTable() {
+    if (!teacherRows.length) {
+      toast('目前沒有資料可複製。');
+      return;
+    }
+
+    const text = teacherTableMatrix().map(function (row) {
+      return row.join('\t');
+    }).join('\n');
+
+    function done() {
+      toast('已複製，可直接貼到 Excel。');
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        if (fallbackCopy(text)) done();
+        else toast('複製失敗，請改用「下載 CSV」。');
+      });
+      return;
+    }
+
+    if (fallbackCopy(text)) done();
+    else toast('複製失敗，請改用「下載 CSV」。');
+  }
+
+  function fallbackCopy(text) {
+    const area = h('textarea', { class: 'copy-area' });
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (err) {
+      ok = false;
+    }
+
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  function downloadTeacherCsv() {
+    if (!teacherRows.length) {
+      toast('目前沒有資料可下載。');
+      return;
+    }
+
+    const lines = teacherTableMatrix().map(function (row) {
+      return row.map(csvCell).join(',');
+    }).join('\r\n');
+
+    const blob = new Blob(['\ufeff' + lines], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '學生練習彙總_' + teacherStamp() + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function csvCell(value) {
+    const text = String(value === null || value === undefined ? '' : value);
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  function teacherStamp() {
+    const now = new Date();
+    const pad = function (n) { return String(n).padStart(2, '0'); };
+    return '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate());
+  }
+
+  function formatTeacherDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    const pad = function (n) { return String(n).padStart(2, '0'); };
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function resetTeacherFilters() {
+    teacherFilters['class'] = '';
+    teacherFilters.subject = '';
+    teacherFilters.from = '';
+    teacherFilters.to = '';
+    refreshTeacherSummary();
   }
 
   /* ---------- History ---------- */

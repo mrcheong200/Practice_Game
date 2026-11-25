@@ -1766,6 +1766,114 @@ button {
   box-shadow: none;
 }
 
+/* 教師後台 */
+.teacher-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.teacher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.teacher-select,
+.teacher-input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.teacher-reset {
+  margin-left: auto;
+}
+
+.teacher-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.teacher-action-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teacher-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.teacher-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: #fff;
+}
+
+.teacher-table th,
+.teacher-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+
+.teacher-table th {
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.teacher-table tbody tr:nth-child(even) {
+  background: #fcfdff;
+}
+
+.teacher-table tbody tr:hover {
+  background: var(--primary-soft);
+}
+
+.teacher-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-name {
+  display: block;
+  font-weight: 600;
+}
+
+.teacher-email {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.copy-area {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  opacity: 0;
+}
+
 @media (min-width: 761px) {
   .world-controls {
     display: none;
